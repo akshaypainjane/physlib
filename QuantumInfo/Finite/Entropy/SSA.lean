@@ -112,22 +112,27 @@ lemma V_rho_conj_mul_self_eq (ρAB : HermitianMat (dA × dB) ℂ) (hρ : ρAB.ma
     (V_rho ρAB)ᴴ * (V_rho ρAB) = ρA_inv_sqrt * ρAB.traceRight.mat * ρA_inv_sqrt := by
   -- By definition of $V_rho$, we can write out the product $V_rho^H * V_rho$.
   simp [V_rho];
-  simp [ ← Matrix.mul_assoc, map_to_tensor_MES_prop ];
+  simp [ ← Matrix.mul_assoc ];
   have h_simp : (Matrix.kroneckerMap (fun x1 x2 => x1 * x2) (ρAB.sqrt : Matrix (dA × dB) (dA × dB) ℂ) (1 : Matrix dB dB ℂ))ᴴ * (Matrix.kroneckerMap (fun x1 x2 => x1 * x2) (ρAB.sqrt : Matrix (dA × dB) (dA × dB) ℂ) (1 : Matrix dB dB ℂ)) = Matrix.kroneckerMap (fun x1 x2 => x1 * x2) (ρAB : Matrix (dA × dB) (dA × dB) ℂ) (1 : Matrix dB dB ℂ) := by
     have h_simp : (ρAB.sqrt : Matrix (dA × dB) (dA × dB) ℂ)ᴴ * (ρAB.sqrt : Matrix (dA × dB) (dA × dB) ℂ) = ρAB := by
       convert ρAB.sqrt_sq ( show 0 ≤ ρAB from ?_ ) using 1;
-      · simp [ HermitianMat.sqrt, Matrix.IsHermitian ];
+      · simp [ HermitianMat.sqrt ];
       · have := hρ.2;
         constructor;
-        · simp [ Matrix.IsHermitian, ρAB.2 ];
-        · intro x; by_cases hx : x = 0 <;> simp_all [ Matrix.sub_mulVec ] ;
+        · simp [Matrix.IsHermitian]
+        · intro x; by_cases hx : x = 0 <;> simp_all
           exact le_of_lt ( this x hx );
-    ext ⟨ i, j ⟩ ⟨ k, l ⟩ ; simp [ ← h_simp, Matrix.mul_apply ] ; ring;
-    by_cases hij : j = l <;> simp [ hij, Matrix.one_apply ];
-    · simp [ ← Finset.sum_filter, Finset.sum_product, hij ];
-      refine' Finset.sum_bij ( fun x _ => x.1 ) _ _ _ _ <;> simp [ hij ];
-      intro a b; exact Or.inl ( by simpa using congr_fun ( congr_fun ( ρAB.sqrt.2 ) i ) ( a, b ) ) ;
-    · exact Finset.sum_eq_zero fun x hx => by aesop;
+    ext ⟨ i, j ⟩ ⟨ k, l ⟩
+    simp [ ← h_simp, Matrix.mul_apply ]
+    ring_nf
+    by_cases hij : j = l
+    · simp [ hij, Matrix.one_apply ]
+      simp [← Finset.sum_filter]
+      refine' Finset.sum_bij ( fun x _ => x.1 ) _ _ _ _ <;> simp
+      intro a b
+      exact Or.inl ( by simpa using congr_fun ( congr_fun ( ρAB.sqrt.2 ) i ) ( a, b ) )
+    · simp [ hij, Matrix.one_apply ]
+      exact Finset.sum_eq_zero (by aesop)
   simp_all [ mul_assoc, Matrix.mul_assoc ];
   simp [ ← Matrix.mul_assoc, ← map_to_tensor_MES_prop ]
 
