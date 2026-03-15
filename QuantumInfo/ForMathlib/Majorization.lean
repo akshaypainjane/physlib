@@ -119,11 +119,17 @@ Combining these gives Horn's inequality:
             = (∏ σ↓(A))(∏ σ↓(B))`.
 -/
 
+namespace AllOrdered
+
 /-- A `LinearOrder` on any `Fintype`, obtained classically via well-ordering. -/
-noncomputable instance fintypeLinearOrderClassical (α : Type*) [Fintype α] [DecidableEq α] :
+scoped instance fintypeLinearOrderClassical (α : Type*) [Fintype α] [DecidableEq α] :
     LinearOrder α := by
   classical
   exact linearOrderOfSTO (WellOrderingRel)
+
+end AllOrdered
+
+open scoped AllOrdered
 
 /-- The `k`-th compound (exterior-power) matrix of `M`. -/
 noncomputable def compoundMatrix (M : Matrix d d ℂ) (k : ℕ) :

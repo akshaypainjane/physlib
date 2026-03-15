@@ -69,8 +69,8 @@ theorem funlike_apply (d : α → Prob) (h : _) (x : α) :
 theorem ext {p q : Distribution α} (h : ∀ x, p x = q x) : p = q :=
   DFunLike.ext p q h
 
-/-- A distribution is a witness that d is nonempty. -/
-instance nonempty (d : Distribution α) : Nonempty α := by
+/-- A distribution provides a witness that d is nonempty. -/
+theorem nonempty (d : Distribution α) : Nonempty α := by
   by_contra h
   simpa [not_nonempty_iff.mp h] using d.2
 

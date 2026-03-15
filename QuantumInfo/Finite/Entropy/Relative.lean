@@ -355,11 +355,6 @@ lemma supportProj_inner_density (h : σ.M.ker ≤ ρ.M.ker) :
   rw [HermitianMat.inner_comm, HermitianMat.inner_supportProj_of_ker_le h]
   simp
 
---PULLOUT
-@[simp]
-theorem HermitianMat.rpow_zero (A : HermitianMat d ℂ) : A ^ (0 : ℝ) = 1 := by
-  simp [rpow_eq_cfc]
-
 /-
 ⟪ρ.M.conj (σ.M ^ t).mat, σ.M ^ (-2 * t)⟫_ℝ = 1 for density matrices ρ, σ with ker(σ) ≤ ker(ρ).
 -/
