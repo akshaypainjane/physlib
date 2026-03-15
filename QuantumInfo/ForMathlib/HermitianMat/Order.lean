@@ -124,6 +124,164 @@ theorem kronecker_pos {A : HermitianMat m 𝕜} (hA : 0 < A) (hB : 0 < B) : 0 < 
   apply trace_pos at hB
   grind only [cases Or]
 
+open MatrixOrder in
+theorem posSemidef_to_nonneg {A : Matrix n n 𝕜} (hA : A.PosSemidef) : 0 ≤ A := by
+  exact hA.nonneg
+
+open MatrixOrder in
+theorem posDef_to_pos {A : Matrix n n 𝕜} (hA : A.PosDef) [Nonempty n] : 0 < A := by
+  apply lt_of_le_of_ne hA.posSemidef.nonneg
+  rintro rfl
+  classical simpa using hA.det_pos
+
+open Lean Meta in
+/-- Given an expression `e` (a matrix) and a proof expression `p` whose type may be
+`Matrix.PosSemidef A`, `Matrix.PosDef A`, or `And P Q` (syntactically), attempt to
+find a proof of nonnegativity or positivity for `e`. Only syntactic matching on the
+head constant is used; `isDefEq` is used only to compare the matrix argument. -/
+private partial def findMatrixPSDInExpr (e : Expr) (p : Expr) (ty : Expr) :
+    MetaM (Option (Bool × Expr)) := do
+  let head := ty.getAppFn
+  if head.isConst then
+    let name := head.constName!
+    if name == ``Matrix.PosSemidef then
+      -- Last argument is the matrix
+      let args := ty.getAppArgs
+      let A := args.back!
+      if ← isDefEq A e then
+        let pf ← mkAppM ``HermitianMat.posSemidef_to_nonneg #[p]
+        return some (false, pf)
+    if name == ``Matrix.PosDef then
+      let args := ty.getAppArgs
+      let A := args.back!
+      if ← isDefEq A e then
+        -- Try strict (needs Nonempty n); extract the index type from PosDef args
+        -- PosDef args: [n, R, Fintype n, Ring R, PartialOrder R, StarRing R, A]
+        let nType := args[0]!
+        let nonemptyType ← mkAppM ``Nonempty #[nType]
+        match ← try? (synthInstance nonemptyType) with
+        | some nonemptyInst =>
+          -- posDef_to_pos : {𝕜} → [RCLike 𝕜] → {n} → [Fintype n] → {A} → (hA : A.PosDef) → [Nonempty n] → 0 < A
+          let pf ← mkAppOptM ``HermitianMat.posDef_to_pos #[none, none, none, none, none, p, nonemptyInst]
+          return some (true, pf)
+        | none =>
+          let pSemidef ← mkAppM ``Matrix.PosDef.posSemidef #[p]
+          let pf ← mkAppM ``HermitianMat.posSemidef_to_nonneg #[pSemidef]
+          return some (false, pf)
+    if name == ``And then
+      let args := ty.getAppArgs
+      if args.size == 2 then
+        -- Recurse on left and right
+        let pLeft ← mkAppM ``And.left #[p]
+        if let some result ← findMatrixPSDInExpr e pLeft args[0]! then
+          return some result
+        let pRight ← mkAppM ``And.right #[p]
+        if let some result ← findMatrixPSDInExpr e pRight args[1]! then
+          return some result
+  return none
+
+open Lean Meta Mathlib.Meta.Positivity in
+/-- Positivity extension for `Matrix`: looks for `A.PosSemidef` or `A.PosDef` in the
+local context (including syntactic `And` conjunctions) to prove `0 ≤ A` or `0 < A`. -/
+@[positivity (_ : HermitianMat _ _)]
+def evalMatrixPSD : PositivityExt where eval {_u _α} _zα _pα e := do
+  let lctx ← getLCtx
+  let mut best : Strictness _zα _pα e := .none
+  for ldecl in lctx do
+    if ldecl.isImplementationDetail then continue
+    let ty := ldecl.type
+    let p : Expr := .fvar ldecl.fvarId
+    if let some (isStrict, pf) ← findMatrixPSDInExpr e p ty then
+      if isStrict then
+        return .positive pf
+      else
+        best := .nonnegative pf
+  match best with
+  | .none => throwError "evalMatrixPSD: no PosSemidef or PosDef hypothesis found for {e}"
+  | other => return other
+
+theorem mat_posSemidef_to_nonneg (hA : A.mat.PosSemidef) : 0 ≤ A :=
+  zero_le_iff.mpr hA
+
+theorem mat_posDef_to_pos [Nonempty n] (hA : A.mat.PosDef) : 0 < A := by
+  apply lt_of_le_of_ne (zero_le_iff.mpr hA.posSemidef)
+  intro h
+  have : A.mat = 0 := by
+    have := congr_arg HermitianMat.mat h.symm
+    simpa
+  rw [this] at hA
+  classical simpa using hA.det_pos
+
+open Lean Meta in
+/-- Given an expression `e` (a `HermitianMat`) and a proof expression `p` whose type may be
+`Matrix.PosSemidef A.mat`, `Matrix.PosDef A.mat`, or `And P Q` (syntactically), attempt to
+find a proof of nonnegativity or positivity for `e`. Only syntactic matching on the
+head constant is used; `isDefEq` is used only to compare the `HermitianMat` argument. -/
+private partial def findHermitianMatPSDInExpr (e : Expr) (p : Expr) (ty : Expr) :
+    MetaM (Option (Bool × Expr)) := do
+  let head := ty.getAppFn
+  if head.isConst then
+    let name := head.constName!
+    if name == ``Matrix.PosSemidef || name == ``Matrix.PosDef then
+      -- Last argument should be `A.mat` i.e. `HermitianMat.mat A`
+      let args := ty.getAppArgs
+      let matExpr := args.back!
+      -- Check if matExpr is `HermitianMat.mat A` (or equivalently `Subtype.val A`)
+      let matHead := matExpr.getAppFn
+      if matHead.isConst && (matHead.constName! == ``HermitianMat.mat ||
+          matHead.constName! == ``Subtype.val) then
+        let matArgs := matExpr.getAppArgs
+        let A := matArgs.back!
+        if ← isDefEq A e then
+          if name == ``Matrix.PosSemidef then
+            let pf ← mkAppM ``HermitianMat.mat_posSemidef_to_nonneg #[p]
+            return some (false, pf)
+          else
+            -- PosDef: try strict (needs Nonempty n)
+            let psdArgs := ty.getAppArgs
+            let nType := psdArgs[0]!
+            let nonemptyType ← mkAppM ``Nonempty #[nType]
+            match ← try? (synthInstance nonemptyType) with
+            | some nonemptyInst =>
+              -- mat_posDef_to_pos : {𝕜} → [RCLike 𝕜] → {n} → [Fintype n] → {A} → [Nonempty n] → (hA : A.mat.PosDef) → 0 < A
+              let pf ← mkAppOptM ``HermitianMat.mat_posDef_to_pos #[none, none, none, none, none, nonemptyInst, p]
+              return some (true, pf)
+            | none =>
+              let pSemidef ← mkAppM ``Matrix.PosDef.posSemidef #[p]
+              let pf ← mkAppM ``HermitianMat.mat_posSemidef_to_nonneg #[pSemidef]
+              return some (false, pf)
+    if name == ``And then
+      let args := ty.getAppArgs
+      if args.size == 2 then
+        let pLeft ← mkAppM ``And.left #[p]
+        if let some result ← findHermitianMatPSDInExpr e pLeft args[0]! then
+          return some result
+        let pRight ← mkAppM ``And.right #[p]
+        if let some result ← findHermitianMatPSDInExpr e pRight args[1]! then
+          return some result
+  return none
+
+open Lean Meta Mathlib.Meta.Positivity in
+/-- Positivity extension for `HermitianMat`: looks for `A.mat.PosSemidef` or `A.mat.PosDef` in
+the local context (including syntactic `And` conjunctions) to prove `0 ≤ A` or `0 < A`. -/
+@[positivity (_ : HermitianMat _ _)]
+def evalHermitianMatPSD : PositivityExt where eval {_u _α} _zα _pα e := do
+  trace[Tactic.positivity] "evalHermitianMatPSD: {e}"
+  let lctx ← getLCtx
+  let mut best : Strictness _zα _pα e := .none
+  for ldecl in lctx do
+    if ldecl.isImplementationDetail then continue
+    let ty := ldecl.type
+    let p : Expr := .fvar ldecl.fvarId
+    if let some (isStrict, pf) ← findHermitianMatPSDInExpr e p ty then
+      if isStrict then
+        return .positive pf
+      else
+        best := .nonnegative pf
+  match best with
+  | .none => throwError "evalHermitianMatPSD: no A.mat.PosSemidef or A.mat.PosDef hypothesis found for {e}"
+  | other => return other
+
 open Lean Meta Mathlib.Meta.Positivity in
 /-- Positivity extension for `HermitianMat.kronecker`: nonneg when both factors are. -/
 @[positivity HermitianMat.kronecker _ _]
@@ -159,6 +317,20 @@ def evalHermitianMatConj : PositivityExt where eval {_u _α} _zα _pα e := do
   let (_, pfA) ← bestResult A
   let pfNonneg ← try mkAppM ``le_of_lt #[pfA] catch _ => pure pfA
   pure (.nonnegative (← mkAppM ``HermitianMat.conj_nonneg #[M, pfNonneg]))
+
+open MatrixOrder in
+example {A : Matrix n n ℂ} (hA : A.PosSemidef) : 0 ≤ A := by
+  positivity
+
+open MatrixOrder in
+example {A : Matrix n n ℂ} [Nonempty n] (hA : A.PosDef) : 0 < A := by
+  positivity
+
+example (hA : A.mat.PosSemidef) : 0 ≤ A := by
+  positivity
+
+example [Nonempty n] (hA : A.mat.PosDef) : 0 < A := by
+  positivity
 
 example [DecidableEq n] [DecidableEq m] [Nonempty n] [Nonempty m]
   (A B : HermitianMat n ℂ) (hA : 0 ≤ A) (hB : 0 ≤ B) (M : Matrix m n ℂ) :

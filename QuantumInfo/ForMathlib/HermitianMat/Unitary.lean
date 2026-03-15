@@ -29,7 +29,7 @@ open Kronecker in
 def unitary_kron (a : 𝐔[α]) (b : 𝐔[β]) : 𝐔[α × β] :=
   ⟨_, kron_unitary a b⟩
 
-scoped notation a:60 " ⊗ᵤ " b:60 => unitary_kron a b
+scoped infixl:60 " ⊗ᵤ " => unitary_kron
 
 @[simp]
 theorem unitary_kron_apply (a : 𝐔[α]) (b : 𝐔[β]) (i₁ i₂ : α) (j₁ j₂ : β) :

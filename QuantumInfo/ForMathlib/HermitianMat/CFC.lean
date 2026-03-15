@@ -560,7 +560,7 @@ lemma continuousOn_cfc_of_compact {K : Set ℝ} {g : ℝ → ℝ} (hK : IsCompac
 
 end joint_continuity
 
-theorem continuous_cfc_joint {X d : Type*} [TopologicalSpace X] [Fintype d] [DecidableEq d]
+theorem continuous_cfc_joint_compact {X d : Type*} [TopologicalSpace X] [Fintype d] [DecidableEq d]
   {f : X → ℝ → ℝ} {A : X → HermitianMat d ℂ} {S : Set X} {T : Set ℝ}
   (hT : IsCompact T)
   (hf : ContinuousOn (fun (p : X × ℝ) ↦ f p.1 p.2) (S ×ˢ T))
@@ -593,6 +593,381 @@ theorem continuous_cfc_joint {X d : Type*} [TopologicalSpace X] [Fintype d] [Dec
     norm_nonneg ( ( A y ).cfc ( f x ) - ( A x ).cfc ( f x ) ),
     dist_eq_norm ( ( A y ).cfc ( f y ) ) ( ( A y ).cfc ( f x ) ),
     dist_eq_norm ( ( A y ).cfc ( f x ) ) ( ( A x ).cfc ( f x ) )]
+
+open scoped Matrix.Norms.Frobenius
+/-
+PROBLEM
+Eigenvalues of a `HermitianMat` are bounded by its (Frobenius) norm.
+PROVIDED SOLUTION
+Use `norm_eq_sum_eigenvalues_sq` which gives `‖A‖² = Σᵢ (A.H.eigenvalues i)²`. Since `(A.H.eigenvalues i)² ≤ Σⱼ (A.H.eigenvalues j)² = ‖A‖²`, we get `|A.H.eigenvalues i| ≤ ‖A‖`.
+-/
+lemma eigenvalue_norm_le (A : HermitianMat d ℂ) (i : d) :
+    |A.H.eigenvalues i| ≤ ‖A‖ := by
+      have h_eigenvalue_bound : (A.H.eigenvalues i)^2 ≤ ‖A‖^2 := by
+        rw [HermitianMat.norm_eq_sqrt_inner_self] at *;
+        simp_all [pow_two];
+        rw [ Real.mul_self_sqrt ( by exact? ) ];
+        convert Finset.single_le_sum ( fun i _ => mul_self_nonneg ( A.H.eigenvalues i ) ) ( Finset.mem_univ i ) using 1;
+        rw [ ← Finset.sum_congr rfl fun _ _ => sq _ ];
+        convert A.norm_eq_sum_eigenvalues_sq using 1;
+        exact?;
+      exact abs_le.mpr ⟨ by nlinarith [ norm_nonneg A ], by nlinarith [ norm_nonneg A ] ⟩
+/--
+The spectrum of a `HermitianMat` is contained in the closed ball of radius `‖A‖` around 0.
+-/
+lemma spectrum_subset_closedBall (A : HermitianMat d ℂ) :
+    spectrum ℝ A.mat ⊆ Metric.closedBall (0 : ℝ) ‖A‖ := by
+  rw [A.H.spectrum_real_eq_range_eigenvalues]
+  rintro _ ⟨i, rfl⟩
+  simp [Metric.mem_closedBall, dist_zero_right, eigenvalue_norm_le]
+/-
+PROBLEM
+Upper semicontinuity of the spectrum of a Hermitian matrix: if the spectrum of `A₀` is contained
+in an open set `U`, then the spectrum of any Hermitian matrix sufficiently close to `A₀` is also
+contained in `U`. This follows from the openness of the set of invertible matrices and compactness.
+PROVIDED SOLUTION
+The proof uses the resolvent approach and compactness.
+1. Let M = ‖A₀‖ + 1. For B in a ball of radius 1 around A₀, ‖B‖ ≤ M, so spectrum ℝ B.mat ⊆ Metric.closedBall 0 M (by spectrum_subset_closedBall and the triangle inequality for norms).
+2. Let K = Metric.closedBall (0 : ℝ) M \ U. Then K is compact (closed and bounded minus open = closed and bounded in ℝ). And K ∩ spectrum ℝ A₀.mat = ∅ (since spectrum ℝ A₀.mat ⊆ U).
+3. For each t ∈ K: t ∉ spectrum ℝ A₀.mat. By the definition of spectrum, A₀.mat - algebraMap ℝ (Matrix d d ℂ) t is a unit. The set of units is open (Units.isOpen, since Matrix d d ℂ has HasSummableGeomSeries). The map B ↦ B.mat - algebraMap ℝ _ t is continuous. So there exist δ_t > 0 and ε_t > 0 such that for ‖B - A₀‖ < δ_t and |s - t| < ε_t, B.mat - algebraMap ℝ _ s is a unit, meaning s ∉ spectrum ℝ B.mat.
+4. By compactness of K (it's compact since it's a closed subset of the compact ball): finitely many ε-balls B(t_j, ε_{t_j}) cover K. Let δ = min(1, min_j δ_{t_j}).
+5. For B with ‖B - A₀‖ < δ: spectrum ℝ B.mat ⊆ Metric.closedBall 0 M (by step 1) and spectrum ℝ B.mat ∩ K = ∅ (by step 4). So spectrum ℝ B.mat ⊆ Metric.closedBall 0 M \ K ⊆ U.
+Note: we need to connect spectrum ℝ B.mat (the real spectrum) to IsUnit in the complex matrix ring. Use that for self-adjoint elements, t ∈ spectrum ℝ A.mat iff algebraMap ℝ (Matrix d d ℂ) t ∈ spectrum ℂ A.mat, and the resolvent set is open. We can use spectrum.isOpen_resolventSet or the characterization via IsUnit.
+-/
+lemma spectrum_subset_of_isOpen (A₀ : HermitianMat d ℂ) (U : Set ℝ)
+    (hU : IsOpen U) (hAU : spectrum ℝ A₀.mat ⊆ U) :
+    ∀ᶠ B in nhds A₀, spectrum ℝ B.mat ⊆ U := by
+      -- Let M = ‖A₀‖ + 1. For B in a ball of radius 1 around A₀, ‖B‖ ≤ M, so spectrum ℝ B.mat ⊆ Metric.closedBall 0 M (by spectrum_subset_closedBall and the triangle inequality for norms).
+      set M := ‖A₀‖ + 1
+      have hM : ∀ B : HermitianMat d ℂ, ‖B - A₀‖ < 1 → spectrum ℝ B.mat ⊆ Metric.closedBall 0 M := by
+        intro B hB
+        have h_norm : ‖B‖ ≤ ‖A₀‖ + 1 := by
+          exact le_trans ( norm_le_of_mem_closedBall ( show B ∈ Metric.closedBall A₀ 1 from by simpa using hB.le ) ) ( by simp +decide [ add_comm ] )
+        generalize_proofs at *;
+        exact spectrum_subset_closedBall B |> Set.Subset.trans <| Metric.closedBall_subset_closedBall <| by simpa;
+      -- Let K = Metric.closedBall (0 : ℝ) M \ U. Then K is compact (closed and bounded minus open = closed and bounded in ℝ). And K ∩ spectrum ℝ A₀.mat = ∅ (since spectrum ℝ A₀.mat ⊆ U).
+      set K := Metric.closedBall (0 : ℝ) M \ U
+      have hK_compact : IsCompact K := by
+        exact IsCompact.diff ( ProperSpace.isCompact_closedBall _ _ ) hU
+      have hK_disjoint : K ∩ spectrum ℝ A₀.mat = ∅ := by
+        exact Set.eq_empty_of_forall_notMem fun x hx => hx.1.2 <| hAU hx.2;
+      -- For each t ∈ K: t ∉ spectrum ℝ A₀.mat. By the definition of spectrum, A₀.mat - algebraMap ℝ (Matrix d d ℂ) t is a unit. The set of units is open (Units.isOpen, since Matrix d d ℂ has HasSummableGeomSeries). The map B ↦ B.mat - algebraMap ℝ _ t is continuous. So there exist δ_t > 0 and ε_t > 0 such that for ‖B - A₀‖ < δ_t and |s - t| < ε_t, B.mat - algebraMap ℝ _ s is a unit, meaning s ∉ spectrum ℝ B.mat.
+      have h_unit : ∀ t ∈ K, ∃ δ_t ε_t : ℝ, 0 < δ_t ∧ 0 < ε_t ∧ ∀ B : HermitianMat d ℂ, ‖B - A₀‖ < δ_t → ∀ s : ℝ, |s - t| < ε_t → IsUnit (B.mat - algebraMap ℝ (Matrix d d ℂ) s) := by
+        intro t ht
+        have h_unit : IsUnit (A₀.mat - algebraMap ℝ (Matrix d d ℂ) t) := by
+          simp_all +decide [ Set.ext_iff, spectrum.mem_iff ];
+          simpa only [ neg_sub, isUnit_iff_exists_inv ] using hK_disjoint t ht |> fun h => by obtain ⟨ u, hu ⟩ := h; exact ⟨ -u, by simp +decide [ hu ] ⟩ ;
+        have h_unit_open : IsOpen {B : Matrix d d ℂ | IsUnit B} := by
+          exact?
+        have h_unit_cont : Continuous (fun p : HermitianMat d ℂ × ℝ => p.1.mat - algebraMap ℝ (Matrix d d ℂ) p.2) := by
+          refine' Continuous.sub _ _ <;> fun_prop (disch := solve_by_elim)
+        have h_unit_cont : ∃ δ_t ε_t : ℝ, 0 < δ_t ∧ 0 < ε_t ∧ ∀ p : HermitianMat d ℂ × ℝ, ‖p.1 - A₀‖ < δ_t ∧ |p.2 - t| < ε_t → IsUnit (p.1.mat - algebraMap ℝ (Matrix d d ℂ) p.2) := by
+          have := Metric.isOpen_iff.mp ( h_unit_open.preimage h_unit_cont ) ( A₀, t ) h_unit
+          generalize_proofs at *; (
+          obtain ⟨ ε, ε_pos, hε ⟩ := this; exact ⟨ ε, ε, ε_pos, ε_pos, fun p hp => hε ( Metric.mem_ball.mpr <| max_lt hp.1 hp.2 ) ⟩ ;)
+        obtain ⟨δ_t, ε_t, hδ_t, hε_t, h_unit_cont⟩ := h_unit_cont
+        use δ_t, ε_t, hδ_t, hε_t, fun B hB s hs => h_unit_cont (B, s) ⟨hB, hs⟩;
+      -- By compactness of K (it's compact since it's a closed subset of the compact ball): finitely many ε-balls B(t_j, ε_{t_j}) cover K. Let δ = min(1, min_j δ_{t_j}).
+      obtain ⟨t_j, ε_j, ht_j, hε_j, h_cover⟩ : ∃ t_j : Finset ℝ, ∃ ε_j : ℝ → ℝ, (∀ t ∈ t_j, 0 < ε_j t) ∧ K ⊆ ⋃ t ∈ t_j, Metric.ball t (ε_j t) ∧ ∀ t ∈ t_j, ∃ δ_t : ℝ, 0 < δ_t ∧ ∀ B : HermitianMat d ℂ, ‖B - A₀‖ < δ_t → ∀ s : ℝ, |s - t| < ε_j t → IsUnit (B.mat - algebraMap ℝ (Matrix d d ℂ) s) := by
+        choose! δ ε hδ hε h_unit using h_unit;
+        have := hK_compact.elim_nhds_subcover ( fun t => Metric.ball t ( ε t ) ) fun t ht => Metric.ball_mem_nhds t ( hε t ht );
+        exact ⟨ this.choose, ε, fun t ht => hε t ( this.choose_spec.1 t ht ), this.choose_spec.2, fun t ht => ⟨ δ t, hδ t ( this.choose_spec.1 t ht ), h_unit t ( this.choose_spec.1 t ht ) ⟩ ⟩;
+      -- Let δ = min(1, min_j δ_{t_j}).
+      obtain ⟨δ, hδ_pos, hδ⟩ : ∃ δ > 0, ∀ t ∈ t_j, ∀ B : HermitianMat d ℂ, ‖B - A₀‖ < δ → ∀ s : ℝ, |s - t| < ε_j t → IsUnit (B.mat - algebraMap ℝ (Matrix d d ℂ) s) := by
+        choose! δ hδ using h_cover;
+        by_cases ht_j_empty : t_j.Nonempty;
+        · exact ⟨ Finset.min' ( t_j.image δ ) ⟨ _, Finset.mem_image_of_mem δ ht_j_empty.choose_spec ⟩, by have := Finset.min'_mem ( t_j.image δ ) ⟨ _, Finset.mem_image_of_mem δ ht_j_empty.choose_spec ⟩ ; aesop, fun t ht B hB s hs => hδ t ht |>.2 B ( lt_of_lt_of_le hB ( Finset.min'_le _ _ ( Finset.mem_image_of_mem δ ht ) ) ) s hs ⟩;
+        · exact ⟨ 1, zero_lt_one, fun t ht => False.elim <| ht_j_empty ⟨ t, ht ⟩ ⟩;
+      filter_upwards [ Metric.ball_mem_nhds A₀ ( show 0 < Min.min 1 δ by positivity ) ] with B hB ; intro t ht ; specialize hM B ( lt_of_lt_of_le hB ( min_le_left _ _ ) ) ht ; simp_all +decide [ spectrum.mem_iff ] ;
+      contrapose! hδ;
+      rcases Set.mem_iUnion₂.mp ( hε_j ⟨ mem_closedBall_zero_iff.mpr hM, hδ ⟩ ) with ⟨ t', ht', ht'' ⟩ ; use t', ht', B, by simpa [ dist_eq_norm ] using hB.2, t ; simp_all +decide [ isUnit_iff_ne_zero, sub_eq_zero ] ;
+      exact ⟨ ht'', fun h => ht <| by simpa [ sub_eq_neg_add ] using h.neg ⟩
+
+/-
+PROBLEM
+The CFC is continuous in the matrix argument when the function is continuous on a set containing
+the spectra, even when that set is not compact. This generalizes `continuousOn_cfc_of_compact`.
+The proof uses Tietze extension from the finite spectrum to a compact interval, applies the
+compact version, and bounds the error using upper semicontinuity of the spectrum.
+PROVIDED SOLUTION
+The proof uses Tietze extension and the compact version `continuousOn_cfc_of_compact`.
+Step 1: Extend g from the finite set spectrum(A₀) to all of ℝ via Tietze.
+The spectrum `Λ := spectrum ℝ A₀.mat` is finite (it equals `Set.range A₀.H.eigenvalues`), hence closed.
+The restriction of g to Λ is continuous (any function on a finite set is continuous in a T1 space, using `continuousOn_finite`).
+By `ContinuousMap.exists_restrict_eq`, there exists a continuous function `h : C(ℝ, ℝ)` with `h = g` on Λ.
+Step 2: (A₀).cfc g = (A₀).cfc h, since g = h on spectrum(A₀) (by `cfc_congr`).
+Step 3: Show `B ↦ B.cfc h` is continuous at A₀.
+Let M = ‖A₀‖ + 1 and K = Set.Icc (-M) M. Since h is continuous on ℝ and hence on K, and K is compact, by `continuousOn_cfc_of_compact`, the map `B ↦ B.cfc h` is continuous on `{B | spectrum ℝ B.mat ⊆ K}`. Since `{B | spectrum ℝ B.mat ⊆ T} ∩ (Metric.ball A₀ 1) ⊆ {B | spectrum ℝ B.mat ⊆ K}` (because for B near A₀, ‖B‖ ≤ M, so spectrum B ⊆ [-M, M] = K by spectrum_subset_closedBall), the map is ContinuousWithinAt at A₀.
+Step 4: Show `‖B.cfc g - B.cfc h‖ → 0` as B → A₀ within `{B | σ(B) ⊆ T}`.
+The function `|g - h|` is 0 on Λ = spectrum(A₀). For each eigenvalue λᵢ ∈ Λ ⊆ T:
+- g is continuous on T at λᵢ
+- h is continuous everywhere
+So `|g(t) - h(t)| = |g(t) - g(λᵢ) + h(λᵢ) - h(t)|` is small for t near λᵢ with t ∈ T.
+Define U_ε = {t ∈ ℝ | ∀ λ ∈ Λ, if |t - λ| < some δ then |g(t) - h(t)| < ε for t ∈ T} ∪ (complement of a ball around Λ).
+Actually, more precisely: the set V_ε = {t : ℝ | t ∈ T → |g(t) - h(t)| < ε} is an open set containing Λ (since |g - h| = 0 on Λ and both are continuous at each point of Λ along T).
+By `spectrum_subset_of_isOpen`, for B near A₀, spectrum(B) ⊆ V_ε.
+Since spectrum(B) ⊆ T, for t ∈ spectrum(B), |g(t) - h(t)| < ε.
+So ‖B.cfc g - B.cfc h‖ ≤ sqrt(d) * ε by `norm_cfc_sub_le_of_sup_le`.
+Step 5: Combine. By the triangle inequality:
+‖B.cfc g - A₀.cfc g‖ ≤ ‖B.cfc g - B.cfc h‖ + ‖B.cfc h - A₀.cfc h‖
+Both terms → 0, so the map is ContinuousWithinAt.
+Use `Metric.continuousWithinAt_iff` and an ε/2 argument.
+-/
+set_option maxHeartbeats 800000 in
+lemma continuousWithinAt_cfc_of_continuousOn {T : Set ℝ} {g : ℝ → ℝ}
+    {A₀ : HermitianMat d ℂ}
+    (hg : ContinuousOn g T) (hA₀ : spectrum ℝ A₀.mat ⊆ T) :
+    ContinuousWithinAt (fun B ↦ B.cfc g) {B | spectrum ℝ B.mat ⊆ T} A₀ := by
+      revert A₀ hg hA₀ g T;
+      intro T g A₀ hg hA₀
+      obtain ⟨h, hh⟩ : ∃ h : ContinuousMap ℝ ℝ, ∀ x ∈ spectrum ℝ A₀.mat, h x = g x := by
+        have h_finite : Set.Finite (spectrum ℝ A₀.mat) := by
+          exact?;
+        have h_tietze : ∀ (s : Set ℝ), IsClosed s → ∀ (g : ℝ → ℝ), ContinuousOn g s → ∃ h : ContinuousMap ℝ ℝ, ∀ x ∈ s, h x = g x := by
+          intro s hs g hg;
+          have := @ContinuousMap.exists_restrict_eq;
+          specialize this hs ( ContinuousMap.mk ( g ∘ Subtype.val ) ( by exact hg.comp_continuous ( continuous_subtype_val ) fun x => x.2 ) ) ; rcases this with ⟨ h, hh ⟩ ; exact ⟨ h, fun x hx => by simpa using congr_arg ( fun f => f ⟨ x, hx ⟩ ) hh ⟩ ;
+        exact h_tietze _ h_finite.isClosed _ ( hg.mono hA₀ ) |> fun ⟨ h, hh ⟩ => ⟨ h, hh ⟩;
+      -- Show `B ↦ B.cfc h` is continuous at A₀.
+      have h_cont : ContinuousWithinAt (fun B : HermitianMat d ℂ => (B.cfc h)) {B : HermitianMat d ℂ | spectrum ℝ B.mat ⊆ T} A₀ := by
+        refine' Continuous.continuousWithinAt _;
+        apply_rules [ HermitianMat.cfc_continuous ];
+        exact h.continuous
+      generalize_proofs at *; (
+      -- Show `‖B.cfc g - B.cfc h‖ → 0` as B → A₀ within `{B | σ(B) ⊆ T}`.
+      have h_diff : ∀ ε > 0, ∃ U ∈ nhds A₀, ∀ B ∈ U ∩ {B : HermitianMat d ℂ | spectrum ℝ B.mat ⊆ T}, ‖B.cfc g - B.cfc h‖ ≤ Real.sqrt (Fintype.card d) * ε := by
+        intro ε ε_pos
+        obtain ⟨δ, δ_pos, hδ⟩ : ∃ δ > 0, ∀ x ∈ T, ∀ y ∈ spectrum ℝ A₀.mat, |x - y| < δ → |g x - h x| < ε / 2 := by
+          have h_cont : ∀ y ∈ spectrum ℝ A₀.mat, ∃ δ > 0, ∀ x ∈ T, |x - y| < δ → |g x - h x| < ε / 2 := by
+            intro y hy
+            have h_cont_y : ContinuousWithinAt (fun x => g x - h x) T y := by
+              exact ContinuousWithinAt.sub ( hg y ( hA₀ hy ) ) ( h.continuous.continuousWithinAt )
+            generalize_proofs at *; (
+            have := Metric.continuousWithinAt_iff.mp h_cont_y ( ε / 2 ) ( half_pos ε_pos ) ; aesop;)
+          generalize_proofs at *; (
+          choose! δ hδ using h_cont
+          generalize_proofs at *; (
+          by_cases h : spectrum ℝ A₀.mat = ∅ <;> simp_all +decide [ Set.ext_iff ];
+          · exact ⟨ 1, zero_lt_one ⟩;
+          · obtain ⟨ y, hy ⟩ := h
+            generalize_proofs at *; (
+            exact ⟨ Finset.min' ( Finset.image δ ( Set.Finite.toFinset ( show Set.Finite ( spectrum ℝ ( A₀ : Matrix d d ℂ ) ) from Set.toFinite _ ) ) ) ⟨ δ y, Finset.mem_image_of_mem _ ( Set.Finite.mem_toFinset _ |>.2 hy ) ⟩, by have := Finset.min'_mem ( Finset.image δ ( Set.Finite.toFinset ( show Set.Finite ( spectrum ℝ ( A₀ : Matrix d d ℂ ) ) from Set.toFinite _ ) ) ) ⟨ δ y, Finset.mem_image_of_mem _ ( Set.Finite.mem_toFinset _ |>.2 hy ) ⟩ ; aesop, fun x hx y hy hxy => hδ y hy |>.2 x hx ( lt_of_lt_of_le hxy ( Finset.min'_le _ _ ( Finset.mem_image_of_mem _ ( Set.Finite.mem_toFinset _ |>.2 hy ) ) ) ) ⟩)))
+        generalize_proofs at *; (
+        -- By `spectrum_subset_of_isOpen`, for B near A₀, spectrum(B) ⊆ V_ε.
+        obtain ⟨U, hU⟩ : ∃ U ∈ nhds A₀, ∀ B ∈ U, spectrum ℝ B.mat ⊆ {x | x ∈ T → |g x - h x| < ε / 2} := by
+          have h_spectrum_subset : ∀ᶠ B in nhds A₀, spectrum ℝ B.mat ⊆ {x | ∃ y ∈ spectrum ℝ A₀.mat, |x - y| < δ} := by
+            apply_rules [ spectrum_subset_of_isOpen ];
+            · exact isOpen_iff_mem_nhds.mpr fun x hx => by rcases hx with ⟨ y, hy, hy' ⟩ ; exact Filter.mem_of_superset ( IsOpen.mem_nhds ( isOpen_lt ( continuous_abs.comp ( continuous_sub_right y ) ) continuous_const ) hy' ) fun z hz => ⟨ y, hy, hz ⟩ ;
+            · exact fun x hx => ⟨ x, hx, by simpa using δ_pos ⟩
+          generalize_proofs at *; (
+          exact ⟨ _, h_spectrum_subset, fun B hB x hx => fun hx' => hδ x hx' _ ( hB hx |>.choose_spec.1 ) ( hB hx |>.choose_spec.2 ) ⟩)
+        generalize_proofs at *; (
+        refine' ⟨ U, hU.1, fun B hB => _ ⟩
+        generalize_proofs at *; (
+        have h_diff : ‖B.cfc g - B.cfc h‖ ≤ Real.sqrt (Fintype.card d) * ⨆ x ∈ spectrum ℝ B.mat, ‖g x - h x‖ := by
+          exact?
+        generalize_proofs at *; (
+        refine' le_trans h_diff ( mul_le_mul_of_nonneg_left _ ( Real.sqrt_nonneg _ ) );
+        refine' ciSup_le fun x => _;
+        by_cases hx : x ∈ spectrum ℝ B.mat <;> simp_all +decide [ abs_lt ];
+        · exact abs_le.mpr ⟨ by linarith [ hU.2 B hB.1 hx ( hB.2 hx ) ], by linarith [ hU.2 B hB.1 hx ( hB.2 hx ) ] ⟩;
+        · linarith))))
+      generalize_proofs at *; (
+      -- By the triangle inequality, we can bound the difference between B.cfc g and A₀.cfc g.
+      have h_triangle : ∀ ε > 0, ∃ U ∈ nhds A₀, ∀ B ∈ U ∩ {B : HermitianMat d ℂ | spectrum ℝ B.mat ⊆ T}, ‖B.cfc g - A₀.cfc g‖ ≤ Real.sqrt (Fintype.card d) * ε + ‖B.cfc h - A₀.cfc h‖ := by
+        intro ε hε_pos
+        obtain ⟨U, hU_nhds, hU⟩ := h_diff ε hε_pos
+        use U, hU_nhds
+        intro B hB
+        have h_triangle : ‖B.cfc g - A₀.cfc g‖ ≤ ‖B.cfc g - B.cfc h‖ + ‖B.cfc h - A₀.cfc h‖ + ‖A₀.cfc h - A₀.cfc g‖ := by
+          convert norm_add_le ( B.cfc g - B.cfc h ) ( B.cfc h - A₀.cfc h + ( A₀.cfc h - A₀.cfc g ) ) |> le_trans <| add_le_add_left ( norm_add_le _ _ ) _ using 1 ; abel_nf
+          ring!
+        generalize_proofs at *; (
+        have h_eq : A₀.cfc h = A₀.cfc g := by
+          apply cfc_congr; exact hh;
+        generalize_proofs at *; (
+        simpa [ h_eq ] using h_triangle.trans ( add_le_add_right ( add_le_add ( hU B hB ) le_rfl ) _ ) |> le_trans <| by simp +decide [ h_eq ] ;))
+      generalize_proofs at *; (
+      refine' Metric.tendsto_nhdsWithin_nhds.mpr _;
+      intro ε εpos
+      obtain ⟨δ, δpos, hδ⟩ : ∃ δ > 0, ∀ B ∈ {B : HermitianMat d ℂ | spectrum ℝ B.mat ⊆ T}, ‖B - A₀‖ < δ → ‖B.cfc h - A₀.cfc h‖ < ε / 2 := by
+        have := Metric.continuousWithinAt_iff.mp h_cont ( ε / 2 ) ( half_pos εpos ) ; simp_all +decide [ dist_eq_norm ] ;
+      generalize_proofs at *; (
+      obtain ⟨ U, hU₁, hU₂ ⟩ := h_triangle ( ε / 2 / ( Real.sqrt ( Fintype.card d ) + 1 ) ) ( by positivity ) ; rcases Metric.mem_nhds_iff.mp hU₁ with ⟨ δ', δ'pos, hδ' ⟩ ; use Min.min δ δ'; simp_all +decide [ dist_eq_norm ] ; (
+      intro B hB₁ hB₂ hB₃; specialize hU₂ B ( hδ' ( mem_ball_iff_norm.mpr hB₃ ) ) hB₁; specialize hδ B hB₁ hB₂; nlinarith [ Real.sqrt_nonneg ( Fintype.card d : ℝ ), mul_div_cancel₀ ( ε / 2 ) ( by positivity : ( Real.sqrt ( Fintype.card d : ℝ ) + 1 ) ≠ 0 ) ] ;)))))
+/-
+PROBLEM
+For `f` jointly continuous on `S ×ˢ T` and the spectrum of `A y` contained in `T`, the difference
+`f(y,t) - f(x₀,t)` can be made uniformly small on `spectrum (ℝ) (A y).mat` for `y` near `x₀`.
+This is the non-compact replacement for `dist_lt_of_continuous'`: instead of uniform convergence
+on a fixed compact set, we get uniform convergence on the (moving, finite) spectrum.
+PROVIDED SOLUTION
+Constructive proof. The key steps:
+Step 1: For each eigenvalue λᵢ := (A x₀).H.eigenvalues i (which is in T by hA₁), the function f is continuous at (x₀, λᵢ) within S ×ˢ T. So there exist open neighborhoods U_i of x₀ and V_i of λᵢ such that for all (y, t) ∈ (U_i ∩ S) × (V_i ∩ T), we have ‖f y t - f x₀ t‖ < ε. Here's how to get this:
+- hf (x₀, λᵢ) gives ContinuousWithinAt at (x₀, λᵢ) within S ×ˢ T
+- Apply this to the ε-ball around f(x₀, λᵢ), use that f(x₀, λᵢ) - f(x₀, λᵢ) = 0 to get ‖f y t - f x₀ λᵢ‖ < ε/2
+- Similarly, hf at (x₀, λᵢ) restricted to {x₀} × T gives ‖f x₀ t - f x₀ λᵢ‖ < ε/2
+- Triangle inequality: ‖f y t - f x₀ t‖ < ε
+- Use `mem_nhds_prod_iff` to extract U_i and V_i from the product neighborhood
+Step 2: The open set W := ⋃ᵢ V_i contains spectrum(A x₀) (since each λᵢ ∈ V_i and spectrum = range of eigenvalues). W is open as a union of open sets. By `spectrum_subset_of_isOpen (A x₀) W`, we get ∀ᶠ B in nhds (A x₀), spectrum ℝ B.mat ⊆ W.
+Step 3: By ContinuousWithinAt of A at x₀ (from hA₂), and the filter from step 2, we get: ∀ᶠ y in nhdsWithin x₀ S, spectrum ℝ (A y).mat ⊆ W. Convert this to ∃ U' ∈ nhds x₀, ∀ y ∈ U' ∩ S, spectrum(A y) ⊆ W.
+Step 4: Take U = U' ∩ ⋂ᵢ U_i (finite intersection since d is Fintype). For y ∈ U ∩ S and t ∈ spectrum(A y):
+- t ∈ T (by hA₁)
+- spectrum(A y) ⊆ W (by step 3), so t ∈ V_i for some i
+- y ∈ U_i ∩ S
+- So ‖f y t - f x₀ t‖ < ε (by step 1)
+Use `by_contra` and arrive at contradiction, or construct the neighborhood directly using `Filter.inter_mem` and `Filter.iInter_mem` (since d is Fintype, the index set is finite).
+IMPORTANT: To get the open sets V_i, use `ContinuousWithinAt` of f at (x₀, λᵢ) which gives an eventually filter statement, then extract using `mem_nhdsWithin_iff_exists_mem_nhds_inter` and `mem_nhds_prod_iff`.
+For the continuity of A composed with spectrum_subset_of_isOpen: use `ContinuousWithinAt.eventually` or compose the filter. Specifically: `(hA₂ x₀ hx₀).eventually (spectrum_subset_of_isOpen (A x₀) W hW_open hW_contains)` gives `∀ᶠ y in nhdsWithin x₀ S, spectrum(A y) ⊆ W`. Then use `Filter.Eventually.exists_mem` to get U'.
+-/
+set_option maxHeartbeats 800000 in
+lemma dist_lt_of_continuous_spectrum {X : Type*} [TopologicalSpace X]
+    {f : X → ℝ → ℝ} {A : X → HermitianMat d ℂ} {S : Set X} {T : Set ℝ}
+    (hf : ContinuousOn (fun (p : X × ℝ) ↦ f p.1 p.2) (S ×ˢ T))
+    (hA₁ : ∀ x ∈ S, spectrum ℝ (A x).mat ⊆ T)
+    (hA₂ : ContinuousOn (fun x ↦ A x) S)
+    {x₀ : X} (hx₀ : x₀ ∈ S) {ε : ℝ} (hε : 0 < ε) :
+    ∃ U ∈ nhds x₀, ∀ y ∈ U ∩ S, ∀ t ∈ spectrum ℝ (A y).mat, ‖f y t - f x₀ t‖ < ε := by
+      by_contra h_contra;
+      -- For each eigenvalue λᵢ := (A x₀).H.eigenvalues i (which is in T by hA₁), the function f is continuous at (x₀, λᵢ) within S ×ˢ T. So there exist open neighborhoods U_i of x₀ and V_i of λᵢ such that for all (y, t) ∈ (U_i ∩ S) × (V_i ∩ T), we have ‖f y t - f x₀ t‖ < ε.
+      obtain ⟨U_i, V_i, hU_i, hV_i, h_cont⟩ : ∃ (U_i : d → Set X) (V_i : d → Set ℝ), (∀ i, IsOpen (U_i i)) ∧ (∀ i, IsOpen (V_i i)) ∧ (∀ i, x₀ ∈ U_i i) ∧ (∀ i, (A x₀).H.eigenvalues i ∈ V_i i) ∧ (∀ i, ∀ y ∈ U_i i ∩ S, ∀ t ∈ V_i i ∩ T, ‖f y t - f x₀ t‖ < ε) := by
+        have h_cont : ∀ i, ∃ (U_i : Set X) (V_i : Set ℝ), IsOpen U_i ∧ IsOpen V_i ∧ x₀ ∈ U_i ∧ (A x₀).H.eigenvalues i ∈ V_i ∧ ∀ y ∈ U_i ∩ S, ∀ t ∈ V_i ∩ T, ‖f y t - f x₀ t‖ < ε := by
+          intro i
+          generalize_proofs at *; (
+          have h_cont : ContinuousWithinAt (fun p : X × ℝ => f p.1 p.2 - f x₀ p.2) (S ×ˢ T) (x₀, (A x₀).H.eigenvalues i) := by
+            have := hf (x₀, (A x₀).H.eigenvalues i) ⟨hx₀, ?_⟩
+            generalize_proofs at *;
+            · convert this.sub ( ContinuousWithinAt.comp ( show ContinuousWithinAt ( fun p : ℝ => f x₀ p ) T ( ( A x₀ ).H.eigenvalues i ) from ?_ ) ( continuousWithinAt_snd ) ?_ ) using 1 <;> norm_num +zetaDelta at *;
+              · have := hf ( x₀, ( A x₀ ).H.eigenvalues i ) ⟨ hx₀, hA₁ x₀ hx₀ ( by
+                  exact? ) ⟩
+                generalize_proofs at *; (
+                convert this.comp ( show ContinuousWithinAt ( fun p => ( x₀, p ) ) T ( ( A x₀ ).H.eigenvalues i ) from ?_ ) ?_ using 1 ;
+                generalize_proofs at *; (
+                exact ContinuousWithinAt.prodMk ( continuousWithinAt_const ) continuousWithinAt_id);
+                exact fun x hx => ⟨ hx₀, hx ⟩);
+              · exact fun x hx => hx.2;
+            · exact hA₁ x₀ hx₀ ( by
+                exact? )
+          generalize_proofs at *; (
+          have := h_cont.eventually ( Metric.ball_mem_nhds _ hε ) ; simp_all +decide [ Metric.mem_ball, dist_eq_norm ] ; (
+          rw [ eventually_nhdsWithin_iff ] at this
+          generalize_proofs at *; (
+          rcases mem_nhds_prod_iff.mp this with ⟨ U, V, hU, hV, h ⟩
+          generalize_proofs at *; (
+          exact ⟨ interior U, isOpen_interior, interior hU, isOpen_interior, mem_interior_iff_mem_nhds.mpr V, mem_interior_iff_mem_nhds.mpr hV, fun y hy hyS t ht htT => h ( Set.mk_mem_prod ( interior_subset hy ) ( interior_subset ht ) ) ⟨ hyS, htT ⟩ ⟩)))))
+        generalize_proofs at *; (
+        choose U_i V_i hU_i hV_i hx₀_i hV_i_i h_cont_i using h_cont; exact ⟨ U_i, V_i, hU_i, hV_i, hx₀_i, hV_i_i, h_cont_i ⟩ ;);
+      -- The open set W := ⋃ᵢ V_i contains spectrum(A x₀) (since each λᵢ ∈ V_i and spectrum = range of eigenvalues). W is open as a union of open sets.
+      set W := ⋃ i, V_i i with hW_def
+      have hW_open : IsOpen W := by
+        exact isOpen_iUnion hV_i
+      have hW_spectrum : spectrum ℝ (A x₀).mat ⊆ W := by
+        intro t ht
+        obtain ⟨i, hi⟩ : ∃ i, t = (A x₀).H.eigenvalues i := by
+          have h_eigenvalues : spectrum ℝ (A x₀).mat = Set.range (A x₀).H.eigenvalues := by
+            exact?
+          generalize_proofs at *; (
+          exact h_eigenvalues.subset ht |> Exists.imp fun i hi => hi.symm)
+        aesop
+      have hW_subset : ∀ᶠ B in nhds (A x₀), spectrum ℝ B.mat ⊆ W := by
+        exact?
+      have hW_subset_S : ∀ᶠ y in nhdsWithin x₀ S, spectrum ℝ (A y).mat ⊆ W := by
+        exact Filter.mem_of_superset ( hA₂.continuousWithinAt hx₀ |> fun h => h.eventually ( hW_subset ) ) fun y hy => hy
+      obtain ⟨U', hU'⟩ : ∃ U' ∈ nhds x₀, ∀ y ∈ U' ∩ S, spectrum ℝ (A y).mat ⊆ W := by
+        obtain ⟨ U', hU' ⟩ := mem_nhdsWithin_iff_exists_mem_nhds_inter.mp hW_subset_S; use U'; aesop;
+      obtain ⟨U'', hU''⟩ : ∃ U'' ∈ nhds x₀, ∀ i, U'' ⊆ U_i i := by
+        exact ⟨ ⋂ i, U_i i, Filter.mem_of_superset ( Filter.iInter_mem.mpr fun i => IsOpen.mem_nhds ( hU_i i ) ( h_cont.1 i ) ) fun x hx => by aesop, fun i => Set.iInter_subset _ i ⟩
+      set U := U' ∩ U'' with hU_def
+      have hU_mem : U ∈ nhds x₀ := by
+        exact Filter.inter_mem hU'.1 hU''.1
+      have hU_subset : ∀ y ∈ U ∩ S, spectrum ℝ (A y).mat ⊆ W := by
+        exact fun y hy => hU'.2 y ⟨ hy.1.1, hy.2 ⟩ |> Set.Subset.trans <| by simp +decide [ hW_def ] ;
+      have hU_cont : ∀ y ∈ U ∩ S, ∀ t ∈ spectrum ℝ (A y).mat, ‖f y t - f x₀ t‖ < ε := by
+        intro y hy t ht
+        obtain ⟨i, hi⟩ : ∃ i, t ∈ V_i i := by
+          exact Set.mem_iUnion.mp ( hU_subset y hy ht ) |> Exists.imp fun i => by tauto;
+        have h_cont_i : ‖f y t - f x₀ t‖ < ε := by
+          exact h_cont.2.2 i y ⟨ hU''.2 i ( by aesop ), hy.2 ⟩ t ⟨ hi, hA₁ y hy.2 ht ⟩ |> fun h => by simpa using h;
+        exact h_cont_i
+      exact h_contra ⟨U, hU_mem, hU_cont⟩
+/-
+PROBLEM
+Joint continuity of the functional calculus, without requiring compactness of `T`.
+This generalizes `continuous_cfc_joint_compact` by removing the `IsCompact T` hypothesis.
+The compactness is unnecessary because the spectrum of a `HermitianMat` (which is
+finite-dimensional) is always finite and hence compact. The proof works by reducing to
+the compact case locally: at each point `x₀ ∈ S`, the spectrum of `A x₀` is finite and
+contained in a compact interval `K = [-M, M]`, and the compact version is applied with a
+continuous extension of `f x₀` from the finite spectrum to `K`.
+PROVIDED SOLUTION
+The proof follows the same structure as `continuous_cfc_joint_compact` but uses the non-compact helpers `dist_lt_of_continuous_spectrum` and `continuousWithinAt_cfc_of_continuousOn` instead of `dist_lt_of_continuous'` and `continuousOn_cfc_of_compact`.
+Fix x ∈ S. Show ContinuousWithinAt.
+Step 1: Show `ContinuousWithinAt (fun y => (A y).cfc (f x)) S x`.
+The function f x (i.e., f(x, ·)) is continuous on T: this follows from `hf.uncurry_left x x_in_S` which gives `ContinuousOn (f x) T`.
+By `continuousWithinAt_cfc_of_continuousOn` with g = f x and T = T:
+  `ContinuousWithinAt (fun B ↦ B.cfc (f x)) {B | spectrum ℝ B.mat ⊆ T} (A x)`.
+Compose with `hA₂.continuousWithinAt x_in_S` and `hA₁`:
+  `ContinuousWithinAt (fun y => (A y).cfc (f x)) S x`.
+Note: We need that `fun y => A y` maps `S` into `{B | spectrum ℝ B.mat ⊆ T}`, which follows from `hA₁`.
+Step 2: Use the triangle inequality, exactly as in `continuous_cfc_joint_compact`:
+Decompose the goal using:
+  dist ((A y).cfc (f y)) ((A x).cfc (f x)) ≤ dist ((A y).cfc (f y)) ((A y).cfc (f x)) + dist ((A y).cfc (f x)) ((A x).cfc (f x))
+For the first term (f varies, A = A(y)):
+Use `dist_lt_of_continuous_spectrum` (our new helper) to get: for any ε > 0, there exists U ∈ nhds x such that for y ∈ U ∩ S and t ∈ spectrum(A y), ‖f y t - f x t‖ < ε.
+Then by `norm_cfc_sub_le_of_sup_le`, ‖(A y).cfc (f y) - (A y).cfc (f x)‖ ≤ sqrt(d) * ε.
+For the second term (A varies, f = f(x)):
+Use step 1 directly (ContinuousWithinAt of B ↦ B.cfc (f x)).
+Combine with the same nlinarith/ε-δ argument as in `continuous_cfc_joint_compact`.
+In code, the proof structure should mirror continuous_cfc_joint_compact closely, just replacing:
+- `dist_lt_of_continuous' hT hf x_in_S ε_pos` with `dist_lt_of_continuous_spectrum hf hA₁ hA₂ x_in_S ε_pos`
+- `continuousOn_cfc_of_compact hT (hf.uncurry_left x x_in_S)` with `continuousWithinAt_cfc_of_continuousOn (hf.uncurry_left x x_in_S) (hA₁ x x_in_S)` composed with hA₂ and hA₁.
+-/
+set_option maxHeartbeats 800000 in
+@[fun_prop]
+theorem continuous_cfc_joint {X d : Type*} [TopologicalSpace X] [Fintype d] [DecidableEq d]
+  {f : X → ℝ → ℝ} {A : X → HermitianMat d ℂ} {S : Set X} {T : Set ℝ}
+  (hf : ContinuousOn (fun (p : X × ℝ) ↦ f p.1 p.2) (S ×ˢ T))
+  (hA₁ : ∀ x ∈ S, spectrum ℝ (A x).mat ⊆ T)
+  (hA₂ : ContinuousOn (fun x ↦ A x) S) :
+    ContinuousOn (fun x ↦ (A x).cfc (f x)) S := by
+      by_contra h_not_cont_at_x₀
+      generalize_proofs at *;
+      have h_cont : ∀ x₀ ∈ S, ContinuousWithinAt (fun x => (A x).cfc (f x)) S x₀ := by
+        intro x₀ hx₀
+        have h_cont : ContinuousWithinAt (fun x => (A x).cfc (f x₀)) S x₀ := by
+          have h_cont : ContinuousWithinAt (fun B => B.cfc (f x₀)) {B | spectrum ℝ B.mat ⊆ T} (A x₀) := by
+            apply_rules [ continuousWithinAt_cfc_of_continuousOn, hf.uncurry_left x₀ hx₀ ]
+          generalize_proofs at *; (
+          exact h_cont.comp ( hA₂.continuousWithinAt hx₀ ) ( by aesop ) |> ContinuousWithinAt.mono <| by aesop;)
+        generalize_proofs at *; (
+        -- By the triangle inequality, we can bound the distance between $(A x).cfc (f x)$ and $(A x₀).cfc (f x₀)$.
+        have h_triangle : ∀ᶠ x in nhdsWithin x₀ S, ‖(A x).cfc (f x) - (A x).cfc (f x₀)‖ ≤ Real.sqrt (Fintype.card d) * (⨆ t ∈ spectrum ℝ (A x).mat, ‖f x t - f x₀ t‖) := by
+          refine' Filter.Eventually.of_forall fun x => _;
+          exact?
+        generalize_proofs at *; (
+        -- By the properties of the supremum, we can bound the distance between $(A x).cfc (f x)$ and $(A x₀).cfc (f x₀)$.
+        have h_sup : Filter.Tendsto (fun x => ⨆ t ∈ spectrum ℝ (A x).mat, ‖f x t - f x₀ t‖) (nhdsWithin x₀ S) (nhds 0) := by
+          have h_sup : ∀ ε > 0, ∃ U ∈ nhdsWithin x₀ S, ∀ x ∈ U, ∀ t ∈ spectrum ℝ (A x).mat, ‖f x t - f x₀ t‖ < ε := by
+            intro ε ε_pos
+            generalize_proofs at *; (
+            have := dist_lt_of_continuous_spectrum hf hA₁ hA₂ hx₀ ε_pos
+            generalize_proofs at *; (
+            obtain ⟨ U, hU₁, hU₂ ⟩ := this; exact ⟨ U ∩ S, mem_nhdsWithin_iff_exists_mem_nhds_inter.mpr ⟨ U, hU₁, by simp +decide ⟩, fun x hx t ht => hU₂ x ⟨ hx.1, hx.2 ⟩ t ht ⟩ ;))
+          generalize_proofs at *; (
+          refine' Metric.tendsto_nhds.mpr _;
+          intro ε ε_pos; rcases h_sup ( ε / 2 ) ( half_pos ε_pos ) with ⟨ U, hU₁, hU₂ ⟩ ; filter_upwards [ hU₁ ] with x hx; simp_all +decide [ dist_eq_norm ] ; (
+          rw [ abs_of_nonneg ( Real.iSup_nonneg fun _ => Real.iSup_nonneg fun _ => abs_nonneg _ ) ] ; refine' lt_of_le_of_lt ( ciSup_le fun t => _ ) ( half_lt_self ε_pos ) ; by_cases ht : t ∈ spectrum ℝ ( A x |> HermitianMat.mat ) <;> simp_all +decide [ abs_lt ] ;
+          · exact abs_le.mpr ⟨ by linarith [ hU₂ x hx t ht ], by linarith [ hU₂ x hx t ht ] ⟩;
+          · linarith [ ε_pos ]))
+        generalize_proofs at *; (
+        have h_final : Filter.Tendsto (fun x => ‖(A x).cfc (f x) - (A x).cfc (f x₀)‖) (nhdsWithin x₀ S) (nhds 0) := by
+          exact squeeze_zero_norm' ( by filter_upwards [ h_triangle ] with x hx; simpa using hx ) ( by simpa using h_sup.const_mul _ ) |> fun h => h.trans ( by simp +decide ) ;
+        generalize_proofs at *; (
+        convert h_cont.add ( show ContinuousWithinAt ( fun x => ( A x |> HermitianMat.cfc ) ( f x ) - ( A x |> HermitianMat.cfc ) ( f x₀ ) ) S x₀ from ?_ ) using 1 ; aesop
+        generalize_proofs at *; (
+        exact tendsto_zero_iff_norm_tendsto_zero.mpr h_final |> fun h => h.trans ( by simp +decide [ ContinuousWithinAt ] ) ;)))))
+      generalize_proofs at *; (
+      exact h_not_cont_at_x₀ <| fun x hx => h_cont x hx |> ContinuousWithinAt.mono <| by simpa;)
 
 /-- Specialization of `continuousOn_cfc_fun` for nonsingular matrices. -/
 @[fun_prop]

@@ -354,7 +354,7 @@ theorem HermitianMat.le_smul_one_imp_eigenvalues_le (A : HermitianMat d ℂ) (M 
   · simp_all
   · convert A.H.mulVec_eigenvectorBasis i using 1
 
-set_option maxHeartbeats 0 in
+set_option maxHeartbeats 400000 in
 open MatrixOrder in
 /-
 If all eigenvalues of a Hermitian matrix are at most M, then the matrix is bounded by M*I.
@@ -380,34 +380,40 @@ theorem HermitianMat.eigenvalues_le_imp_le_smul_one (A : HermitianMat d ℂ) (M 
       · simp [ ← Matrix.mul_assoc];
     · intro x
       have h_inner : star x ⬝ᵥ (U * M • 1 * star U - U * D * star U) *ᵥ x = star (star U *ᵥ x) ⬝ᵥ (M • 1 - D) *ᵥ (star U *ᵥ x) := by
-        simp [ Matrix.mul_assoc, Matrix.sub_mul, Matrix.dotProduct_mulVec]
-        simp [ Matrix.vecMul, dotProduct];
-        simp [ Matrix.mul_apply, mul_sub, mul_comm, mul_left_comm, Finset.mul_sum _ _ _ ];
-        simp [ Matrix.mulVec, dotProduct, mul_comm, mul_left_comm, Finset.mul_sum _ _ _ ];
+        simp only [Algebra.mul_smul_comm, mul_one, Algebra.smul_mul_assoc, Matrix.mul_assoc,
+          Matrix.dotProduct_mulVec, Matrix.mulVec_mulVec, Matrix.sub_mul, one_mul]
+        simp only [dotProduct, Matrix.vecMul, Pi.star_apply, RCLike.star_def, Matrix.sub_apply,
+          Matrix.smul_apply, Complex.real_smul, Matrix.star_apply];
+        simp only [Matrix.mul_apply, Matrix.star_apply, RCLike.star_def, Finset.mul_sum _ _ _,
+          mul_left_comm, mul_sub, mul_comm, Finset.sum_sub_distrib];
+        simp only [Matrix.mulVec, dotProduct, Matrix.star_apply, RCLike.star_def, mul_comm, map_sum,
+          map_mul, RingHomCompTriple.comp_apply, RingHom.id_apply, Finset.mul_sum _ _ _,
+          mul_left_comm];
         exact congrArg₂ _ ( Finset.sum_congr rfl fun _ _ => Finset.sum_comm.trans ( Finset.sum_congr rfl fun _ _ => Finset.sum_congr rfl fun _ _ => by ring ) ) ( Finset.sum_congr rfl fun _ _ => Finset.sum_comm.trans ( Finset.sum_congr rfl fun _ _ => Finset.sum_comm.trans ( Finset.sum_congr rfl fun _ _ => Finset.sum_congr rfl fun _ _ => by ring ) ) );
       have h_inner_nonneg : ∀ y : d → ℂ, 0 ≤ star y ⬝ᵥ (M • 1 - D) *ᵥ y := by
         intro y
         have h_inner_nonneg : ∀ i, 0 ≤ (M - D i i) * (star (y i) * y i) := by
           intro i
-          have h_inner_nonneg : 0 ≤ (M - D i i) * (star (y i) * y i) := by
-            have h_inner_nonneg : 0 ≤ (M - D i i) * (y i * star (y i)) := by
-              have h_inner_nonneg : 0 ≤ (M - D i i) * (y i * star (y i)) := by
-                have h_inner_nonneg : 0 ≤ (M - D i i) := by
-                  exact sub_nonneg_of_le ( hD_le i )
-                have h_inner_nonneg' : 0 ≤ (y i * star (y i)) := by
-                  simp [ Complex.mul_conj, Complex.normSq_eq_norm_sq ]
-                exact mul_nonneg h_inner_nonneg h_inner_nonneg';
-              exact h_inner_nonneg
-            simpa only [ mul_comm ] using h_inner_nonneg;
-          exact h_inner_nonneg;
+          have h_inner_nonneg : 0 ≤ (M - D i i) * (y i * star (y i)) := by
+            have h_inner_nonneg : 0 ≤ (M - D i i) := by
+              exact sub_nonneg_of_le ( hD_le i )
+            have h_inner_nonneg' : 0 ≤ (y i * star (y i)) := by
+              simp [ Complex.mul_conj, Complex.normSq_eq_norm_sq ]
+            exact mul_nonneg h_inner_nonneg h_inner_nonneg'
+          nth_rw 2 [mul_comm] at h_inner_nonneg
+          exact h_inner_nonneg
         simp_all [ Matrix.mulVec, dotProduct, Finset.mul_sum _ _ _, mul_assoc, mul_comm, mul_left_comm ];
         rw [ Finset.sum_comm ];
-        refine' Finset.sum_nonneg fun i _ => _;
-        rw [ Finset.sum_eq_single i ] <;> simp_all [ Matrix.one_apply ];
-        exact fun j hj => Or.inr <| Or.inl <| hD_diag hj;
+        refine Finset.sum_nonneg fun i _ => ?_
+        rw [ Finset.sum_eq_single i ]
+        · simp_all [ Matrix.one_apply ];
+        · simp +contextual
+          exact fun j hj => Or.inr <| Or.inl <| hD_diag hj
+        · intro; contradiction
       exact h_inner.symm ▸ h_inner_nonneg _;
-  convert hA_le using 1;
-  constructor <;> intro h <;> rw [ ← hA_eq ] at * <;> simp_all [ Matrix.mul_assoc ];
+      -- sorry
+  rw [ ← hA_eq ] at hA_le
+  simp only [Algebra.mul_smul_comm, mul_one, Algebra.smul_mul_assoc, hU_unitary] at hA_le
   exact hA_le
 
 /-- The block matrix [[1, X], [X†, X†X]] is positive semidefinite. -/

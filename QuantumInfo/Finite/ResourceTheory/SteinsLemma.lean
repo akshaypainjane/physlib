@@ -432,11 +432,8 @@ private lemma commute_aux (n : ℕ) {x : ℝ}
   obtain ⟨C, ⟨f, rfl⟩, ⟨g, rfl⟩⟩ := hℰσ.exists_HermitianMat_cfc
   rw [HermitianMat.log, HermitianMat.log]
   rw [← HermitianMat.cfc_comp, ← HermitianMat.cfc_comp, ← HermitianMat.cfc_sub]
-  rw [HermitianMat.projLT_def, ← HermitianMat.cfc_const_mul] at hE
-  rw [← HermitianMat.cfc_sub, ← HermitianMat.cfc_comp] at hE
-  subst E
-  rw [← HermitianMat.cfc_const_mul]
-  apply HermitianMat.cfc_self_commute
+  rw [HermitianMat.projLT_def] at hE
+  commutes
 
 open HermMul in
 private lemma rexp_mul_smul_proj_lt_mul_sub_le_mul_sub {n : ℕ} {x : ℝ}
@@ -1166,15 +1163,11 @@ private theorem EquationS62
     simp only [HermitianMat.mat_sub, MState.mat_M, HermitianMat.mat_smul]
     suffices h : Commute (ℰ n (ρ ⊗ᵣ^[n])).m (σ'' ρ ε m σ n).m by
       apply Commute.sub_left
-      · apply Commute.sub_right
-        · rfl
-        · apply Commute.smul_right
-          exact h
+      · commutes
       · apply Commute.smul_left
         apply Commute.sub_right
         · exact Commute.symm ‹_›
-        · apply Commute.smul_right
-          rfl
+        · commutes
     exact pinching_commutes (ρ ⊗ᵣ^[n]) (σ'' ρ ε m σ n)
 
   have hPcomm ε2 n : Commute (P1 ε2 n).mat (P2 ε2 n).mat := by
@@ -1259,7 +1252,7 @@ private theorem EquationS62
     rw [HermitianMat.projLE_def]
     apply HermitianMat.cfc_commute
     apply Commute.sub_left
-    · simp only [HermitianMat.val_eq_coe, MState.mat_M, Commute.refl]
+    · rfl
     · apply Commute.smul_left
       apply Commute.symm
       exact pinching_commutes (ρ ⊗ᵣ^[n]) (σ'' ρ ε m σ n)
@@ -1311,8 +1304,6 @@ private theorem EquationS62
           -- apply hσ'' ε2 n to log by monotonicity
           rw [← HermitianMat.val_eq_coe, ← HermitianMat.val_eq_coe]
           rw [Subtype.coe_le_coe]
-          have h_comm : Commute ((Real.exp _ • 1 : HermitianMat _ ℂ).mat) _ :=
-            Commute.smul_left (Commute.one_left (σ'' ρ ε m σ n).M.mat) (Real.exp (-(n * c' ε2 n)))
           exact HermitianMat.log_mono
             (Matrix.PosDef.smul Matrix.PosDef.one (Real.exp_pos (-(n * c' ε2 n))))
             (by simpa using hσ'' ε2 n)
@@ -1329,7 +1320,7 @@ private theorem EquationS62
             apply Commute.sub_left
             · exact pinching_commutes (ρ ⊗ᵣ^[n]) (σ'' ρ ε m σ n)
             · apply Commute.smul_left
-              · rfl
+              rfl
           · -- prove `Commute (E3 _) (_ 1).log`
             conv_rhs =>
               rw [HermitianMat.log_smul (by positivity)]

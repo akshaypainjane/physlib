@@ -5,6 +5,7 @@ Authors: Alex Meiburg
 -/
 import QuantumInfo.ForMathlib.HermitianMat.LogExp
 import QuantumInfo.ForMathlib.HermitianMat.Sqrt
+import QuantumInfo.ForMathlib.HermitianMat.Unitary
 import Mathlib.Analysis.SpecialFunctions.Integrability.Basic
 import Mathlib.Analysis.SpecialFunctions.ImproperIntegrals
 import Mathlib.MeasureTheory.Integral.IntegralEqImproper
@@ -95,6 +96,14 @@ theorem one_rpow : (1 : HermitianMat d 𝕜) ^ r = 1 := by
     rw [rpow_eq_cfc]
     gcongr
     simp
+
+@[simp]
+lemma rpow_zero (A : HermitianMat d 𝕜) : A ^ (0 : ℝ) = 1 := by
+  simp [rpow_eq_cfc]
+
+lemma rpow_diagonal (a : d → ℝ) (r : ℝ) :
+  (diagonal ℂ a) ^ r = diagonal ℂ (fun i => a i ^ r) := by
+    exact cfc_diagonal _ _
 
 /-- Keeps in line with our simp-normal form for moving reindex outwards. -/
 @[simp]
@@ -235,6 +244,86 @@ theorem ker_rpow_le_of_nonneg {A : HermitianMat d ℂ} (hA : 0 ≤ A) :
     (A ^ r).ker ≤ A.ker := by
   apply ker_cfc_le_ker_nonneg hA
   grind [Real.rpow_eq_zero_iff_of_nonneg, Real.rpow_eq_pow]
+
+private lemma rpow_kron_diagonal
+    (a : d → ℝ) (b : d₂ → ℝ) (r : ℝ) (ha : ∀ i, 0 ≤ a i) (hb : ∀ j, 0 ≤ b j) :
+    ((diagonal ℂ a) ⊗ₖ (diagonal ℂ b)) ^ r =
+    ((diagonal ℂ a) ^ r) ⊗ₖ ((diagonal ℂ b) ^ r) := by
+  simp only [kronecker_diagonal, rpow_diagonal]
+  congr! 2 with x
+  apply Real.mul_rpow (ha x.1) (hb x.2)
+
+open scoped Kronecker in
+omit [DecidableEq d] [DecidableEq d₂] in
+lemma conj_kron
+  (A : Matrix d d 𝕜) (B : Matrix d₂ d₂ 𝕜) (C : HermitianMat d 𝕜) (D : HermitianMat d₂ 𝕜) :
+    conj (A ⊗ₖ B) (C ⊗ₖ D) = conj A C ⊗ₖ conj B D := by
+  ext1
+  simp [conj, Matrix.mul_kronecker_mul, Matrix.conjTranspose_kronecker]
+
+lemma rpow_kron
+    {A : HermitianMat d ℂ} {B : HermitianMat d₂ ℂ} (r : ℝ) (hA : 0 ≤ A) (hB : 0 ≤ B) :
+    (A ⊗ₖ B) ^ r = (A ^ r) ⊗ₖ (B ^ r) := by
+  obtain ⟨U, a, ha, hA⟩ : ∃ U : 𝐔[d], ∃ a : d → ℝ, (∀ i, 0 ≤ a i) ∧ A = conj U.val (diagonal ℂ a) := by
+    rw [zero_le_iff] at hA
+    exact ⟨_, _, hA.eigenvalues_nonneg, eq_conj_diagonal A⟩
+  obtain ⟨V, b, hb, hB⟩ : ∃ V : 𝐔[d₂], ∃ b : d₂ → ℝ, (∀ j, 0 ≤ b j) ∧ B = conj V.val (diagonal ℂ b) := by
+    rw [zero_le_iff] at hB
+    exact ⟨_, _, hB.eigenvalues_nonneg, eq_conj_diagonal B⟩
+  have h_kron_r_pow : (A ⊗ₖ B) ^ r = conj (Matrix.unitary_kron U V).val ((diagonal ℂ a ⊗ₖ diagonal ℂ b) ^ r) := by
+    subst hB hA
+    rw [← rpow_conj_unitary, Matrix.unitary_kron, conj_kron]
+  rw [h_kron_r_pow]
+  subst A B
+  have h_kron_r_pow_diag : (diagonal ℂ a ⊗ₖ diagonal ℂ b) ^ r = ((diagonal ℂ a) ^ r) ⊗ₖ ((diagonal ℂ b) ^ r) := by
+    exact rpow_kron_diagonal a b r ha hb
+  rw [h_kron_r_pow_diag, Matrix.unitary_kron]
+  rw [rpow_conj_unitary, rpow_conj_unitary, ← conj_kron]
+
+attribute [fun_prop] ContinuousAt.rpow ContinuousOn.rpow
+
+lemma continuousOn_rpow_uniform {K : Set ℝ} (hK : IsCompact K) :
+    ContinuousOn (fun r : ℝ ↦ UniformOnFun.ofFun {K} (fun t : ℝ ↦ t ^ r)) (Set.Ioi 0) := by
+  refine continuousOn_of_forall_continuousAt fun r hr => ?_
+  rw [Set.mem_Ioi] at hr
+  apply UniformOnFun.tendsto_iff_tendstoUniformlyOn.mpr
+  simp only [Set.mem_singleton_iff, UniformOnFun.toFun_ofFun, Metric.tendstoUniformlyOn_iff,
+    Function.comp_apply, forall_eq]
+  intro ε hεpos;
+  have h_unif_cont : UniformContinuousOn (fun (p : ℝ × ℝ) => p.1 ^ p.2) (K ×ˢ Set.Icc (r / 2) (r * 2)) := by
+    apply IsCompact.uniformContinuousOn_of_continuous
+    · exact hK.prod CompactIccSpace.isCompact_Icc
+    · refine continuousOn_of_forall_continuousAt fun p ⟨hp₁, ⟨hp₂₁, hp₂₂⟩⟩ ↦ ?_
+      have _ : p.1 ≠ 0 ∨ 0 < p.2 := by right; linarith
+      fun_prop (disch := assumption)
+  rw [Metric.uniformContinuousOn_iff] at h_unif_cont
+  obtain ⟨δ, hδpos, H⟩ := h_unif_cont ε hεpos
+  filter_upwards [Ioo_mem_nhds (show r / 2 < r by linarith) (show r < r * 2 by linarith), Ioo_mem_nhds (show r - δ < r by linarith) (show r < r + δ by linarith)] with n ⟨_, _⟩ ⟨_, _⟩ x hx
+  refine H (x, r) ⟨hx, ?_⟩ (x, n) ⟨hx, ?_⟩ ?_
+  · constructor <;> linarith
+  · constructor <;> linarith
+  · have : |r - n| < δ := abs_lt.mpr ⟨by linarith, by linarith⟩
+    simpa
+
+section continuity
+
+/-- Joint continuity of matrix rpow for Hermitian matrices with positive exponent -/
+@[fun_prop]
+theorem continuousOn_rpow_joint_nonneg_pos
+    {X : Type*} [TopologicalSpace X]
+    {A : X → HermitianMat d ℂ} {p : X → ℝ} {S : Set X}
+    (hA : ContinuousOn A S) (hp : ContinuousOn p S)
+    (hp_pos : ∀ x ∈ S, 0 < p x) :
+    ContinuousOn (fun x ↦ A x ^ p x) S := by
+  have h_cont_f : ContinuousOn (fun q : X × ℝ => q.2 ^ p q.1) (S ×ˢ Set.univ) := by
+    -- fun_prop (disch := grind [Set.MapsTo]) --After BUMP - fix in discharger
+    apply continuousOn_snd.rpow
+    · exact hp.comp continuousOn_fst (fun x ↦ And.left)
+    · grind
+  simp_rw [rpow_eq_cfc]
+  fun_prop (disch := simp)
+
+end continuity
 
 /-
 For a positive Hermitian matrix A, (A^2)^(p/2) = A^p, expressed using functional calculus.

@@ -419,7 +419,7 @@ theorem pure_iff_purity_one : (∃ ψ, ρ = pure ψ) ↔ ρ.purity = 1 := by
           simp [ Matrix.trace_mul_comm, Matrix.mul_assoc ];
           exact Finset.sum_congr rfl fun _ _ => by ring;
         convert congr_arg Complex.re h_eigenvalues using 1;
-      aesop;
+      simp_all only [Set.Icc.coe_one]
     have h_eigenvalues : ∑ i, (ρ.spectrum i).val * ((ρ.spectrum i).val - 1) = 0 := by
       simp_all [ sq, mul_sub ];
     -- Since each term in the sum is non-positive and their sum is zero, each term must be zero.
@@ -437,7 +437,28 @@ theorem pure_iff_purity_one : (∃ ψ, ρ = pure ψ) ↔ ρ.purity = 1 := by
     -- Since the sum of the eigenvalues is 1 and one of them is 1, the remaining eigenvalues must sum to 0. Given that each eigenvalue is either 0 or 1, the only way their sum can be 0 is if all of them are 0.
     have h_sum_zero : ∑ j ∈ Finset.univ.erase i, (ρ.spectrum j).val = 0 := by
       rw [ ← Finset.sum_erase_add _ _ ( Finset.mem_univ i ), hi ] at h_sum_one ; linarith;
-    rw [ Finset.sum_eq_zero_iff_of_nonneg ] at h_sum_zero <;> aesop
+    rw [ Finset.sum_eq_zero_iff_of_nonneg ] at h_sum_zero
+    · simp_all only [Finset.sum_const_zero, mul_eq_zero, Set.Icc.coe_eq_zero, Set.Icc.coe_eq_one,
+        Distribution.normalized, Finset.mem_erase, ne_eq, Finset.mem_univ, and_true]
+      apply Exists.intro
+      · ext x : 2
+        simp_all only [Distribution.constant_eq]
+        split
+        next h_1 =>
+          subst h_1
+          simp_all only [Set.Icc.coe_one, Set.Icc.coe_eq_one]
+          exact hi
+        next h_1 =>
+          simp_all only [Set.Icc.coe_zero, Set.Icc.coe_eq_zero]
+          apply h_sum_zero
+          apply Aesop.BuiltinRules.not_intro
+          intro a
+          subst a
+          simp_all only [not_true_eq_false]
+    · intro i_1 a
+      simp_all only [Finset.sum_const_zero, mul_eq_zero, Set.Icc.coe_eq_zero, Set.Icc.coe_eq_one,
+        Distribution.normalized, Finset.mem_univ, Finset.sum_erase_eq_sub, Set.Icc.coe_one, sub_self, Finset.mem_erase,
+        ne_eq, and_true, Prob.zero_le_coe]
 
 --TODO: Would be better if there was an `MState.eigenstate` or similar (maybe extending
 -- a similar thing for `HermitianMat`) and then this could be an equality with that, as
@@ -585,7 +606,7 @@ theorem spectrum_prod (ρ₁ : MState d₁) (ρ₂ : MState d₂) : ∃(σ : d�
         refine' ⟨ _, _, this ⟩;
         grind;
       refine' ⟨ Matrix.kroneckerMap ( fun x y => x * y ) U_A U_B, _, _ ⟩;
-      · simp_all [ Matrix.mem_unitaryGroup_iff ];
+      · simp_all only [ne_eq, Matrix.mem_unitaryGroup_iff, mat_M, Matrix.star_kron];
         have h_unitary : Matrix.kroneckerMap (fun x y => x * y) U_A U_B * Matrix.kroneckerMap (fun x y => x * y) (Star.star U_A) (Star.star U_B) = 1 := by
           have h_unitary : Matrix.kroneckerMap (fun x y => x * y) U_A U_B * Matrix.kroneckerMap (fun x y => x * y) (Star.star U_A) (Star.star U_B) = Matrix.kroneckerMap (fun x y => x * y) (U_A * Star.star U_A) (U_B * Star.star U_B) := by
             ext ⟨ i, j ⟩ ⟨ k, l ⟩ ; simp [ Matrix.mul_apply, Matrix.kroneckerMap_apply ]
@@ -593,7 +614,7 @@ theorem spectrum_prod (ρ₁ : MState d₁) (ρ₂ : MState d₂) : ∃(σ : d�
             erw [ Finset.sum_product ]
             simp [ mul_assoc, mul_comm, mul_left_comm, Finset.mul_sum]
             exact Finset.sum_comm.trans ( Finset.sum_congr rfl fun _ _ => Finset.sum_congr rfl fun _ _ => by ring );
-          aesop;
+          simp_all only [zero_mul, implies_true, mul_zero, mul_one, Matrix.kroneckerMap_one_one]
         exact h_unitary
       · simp_all [ MState.prod, Matrix.mul_assoc, Matrix.mul_kronecker_mul ];
         congr 2;
@@ -881,57 +902,59 @@ theorem pure_iff_rank_eq_one {d : Type*} [Fintype d] [DecidableEq d] (ρ : MStat
     generalize_proofs at *;
     refine' MState.ext_m _ ; aesop
 
-/-
+/--
 A ket on a product space is a product state if and only if its coefficient matrix has rank 1.
 -/
 theorem Ket.IsProd_iff_rank_eq_one {d₁ d₂ : Type*} [Fintype d₁] [Fintype d₂] [DecidableEq d₁] [DecidableEq d₂]
     (ψ : Ket (d₁ × d₂)) :
     ψ.IsProd ↔ (Matrix.of (fun i j => ψ (i, j))).rank = 1 := by
-      rw [ Ket.IsProd_iff_mul_eq_mul ];
-      constructor;
-      · intro h;
-        obtain ⟨ξ, ψ', hξψ'⟩ : ∃ ξ : d₁ → ℂ, ∃ ψ' : d₂ → ℂ, ∀ i j, ψ (i, j) = ξ i * ψ' j := by
-          -- Let's choose any $j₀$ such that $\psi(i, j₀) \neq 0$ for some $i$.
-          obtain ⟨j₀, hj₀⟩ : ∃ j₀ : d₂, ∃ i₀ : d₁, ψ (i₀, j₀) ≠ 0 := by
-            have := ψ.exists_ne_zero;
-            exact ⟨ this.choose.2, this.choose.1, this.choose_spec ⟩;
-          choose i₀ hi₀ using hj₀;
-          exact ⟨ fun i => ψ ( i, j₀ ) / ψ ( i₀, j₀ ), fun j => ψ ( i₀, j ), fun i j => by rw [ div_mul_eq_mul_div, eq_div_iff hi₀ ] ; linear_combination h i i₀ j j₀ ⟩;
-        -- Since the matrix is a product of two vectors, its rank is 1.
-        have h_rank : Matrix.rank (Matrix.of (fun i j => ξ i * ψ' j)) ≤ 1 := by
-          -- The range of the matrix is spanned by the single vector ξ.
-          have h_range : LinearMap.range (Matrix.mulVecLin (Matrix.of (fun i j => ξ i * ψ' j))) ≤ Submodule.span ℂ {ξ} := by
-            rintro x ⟨ y, rfl ⟩;
-            rw [ Submodule.mem_span_singleton ];
-            exact ⟨ ∑ j, ψ' j * y j, by ext i; simp [ Matrix.mulVec, dotProduct, mul_comm, mul_left_comm, Finset.mul_sum _ _ _ ] ⟩;
-          exact le_trans ( Submodule.finrank_mono h_range ) ( finrank_span_le_card _ ) |> le_trans <| by norm_num;
-        cases h_rank.eq_or_lt <;> simp_all [ Matrix.rank, Submodule.eq_bot_iff ];
-        · convert ‹Module.finrank ℂ ( LinearMap.range ( Matrix.mulVecLin ( Matrix.of fun i j => ξ i * ψ' j ) ) ) = 1› using 3 ; aesop;
-          · aesop;
-          · ext; simp [hξψ'];
-        · have := ψ.exists_ne_zero
-          simp_all only [ne_eq, mul_eq_zero, not_or, Prod.exists, exists_and_left, exists_and_right]
-          obtain ⟨left, right⟩ := this
-          obtain ⟨w, h_2⟩ := left
-          obtain ⟨w_1, h_3⟩ := right
-          rename_i h_1
-          specialize h_1 ( Pi.single w_1 1 )
-          simp_all [ funext_iff]
-      · rw [ Matrix.rank ];
-        rw [ finrank_eq_one_iff' ]
-        intro a i₁ i₂ j₁ j₂
-        simp_all only [ne_eq, Subtype.forall, LinearMap.mem_range, Matrix.mulVecBilin_apply, forall_exists_index,
-          Subtype.exists, Submodule.mk_eq_zero, SetLike.mk_smul_mk, Subtype.mk.injEq, forall_apply_eq_imp_iff,
-          exists_and_left, exists_prop]
-        obtain ⟨w, h⟩ := a
-        obtain ⟨left, right⟩ := h
-        obtain ⟨left_1, right⟩ := right
-        obtain ⟨w_1, h⟩ := left_1
-        subst h
-        obtain ⟨ c, hc ⟩ := right ( Pi.single j₁ 1 ) ;
-        obtain ⟨ d, hd ⟩ := right ( Pi.single j₂ 1 ) ;
-        simp_all [ funext_iff, Matrix.mulVec ] ;
-        rw [ ← hc i₁, ← hd i₁, ← hc i₂, ← hd i₂ ] ; ring
+  rw [ Ket.IsProd_iff_mul_eq_mul ];
+  constructor;
+  · intro h;
+    obtain ⟨ξ, ψ', hξψ'⟩ : ∃ ξ : d₁ → ℂ, ∃ ψ' : d₂ → ℂ, ∀ i j, ψ (i, j) = ξ i * ψ' j := by
+      -- Let's choose any $j₀$ such that $\psi(i, j₀) \neq 0$ for some $i$.
+      obtain ⟨j₀, hj₀⟩ : ∃ j₀ : d₂, ∃ i₀ : d₁, ψ (i₀, j₀) ≠ 0 := by
+        have := ψ.exists_ne_zero;
+        exact ⟨ this.choose.2, this.choose.1, this.choose_spec ⟩;
+      choose i₀ hi₀ using hj₀;
+      exact ⟨ fun i => ψ ( i, j₀ ) / ψ ( i₀, j₀ ), fun j => ψ ( i₀, j ), fun i j => by rw [ div_mul_eq_mul_div, eq_div_iff hi₀ ] ; linear_combination h i i₀ j j₀ ⟩;
+    -- Since the matrix is a product of two vectors, its rank is 1.
+    have h_rank : Matrix.rank (Matrix.of (fun i j => ξ i * ψ' j)) ≤ 1 := by
+      -- The range of the matrix is spanned by the single vector ξ.
+      have h_range : LinearMap.range (Matrix.mulVecLin (Matrix.of (fun i j => ξ i * ψ' j))) ≤ Submodule.span ℂ {ξ} := by
+        rintro x ⟨ y, rfl ⟩;
+        rw [ Submodule.mem_span_singleton ];
+        exact ⟨ ∑ j, ψ' j * y j, by ext i; simp [ Matrix.mulVec, dotProduct, mul_comm, mul_left_comm, Finset.mul_sum _ _ _ ] ⟩;
+      exact le_trans ( Submodule.finrank_mono h_range ) ( finrank_span_le_card _ ) |> le_trans <| by norm_num;
+    cases h_rank.eq_or_lt <;> simp_all [ Matrix.rank, Submodule.eq_bot_iff ];
+    · convert ‹Module.finrank ℂ ( LinearMap.range ( Matrix.mulVecLin ( Matrix.of fun i j => ξ i * ψ' j ) ) ) = 1› using 3 ; aesop;
+      · aesop;
+      · ext; simp [hξψ'];
+    · have := ψ.exists_ne_zero
+      simp_all only [ne_eq, mul_eq_zero, not_or, Prod.exists, exists_and_left, exists_and_right]
+      obtain ⟨left, right⟩ := this
+      obtain ⟨w, h_2⟩ := left
+      obtain ⟨w_1, h_3⟩ := right
+      rename_i h_1
+      specialize h_1 ( Pi.single w_1 1 )
+      simp_all [ funext_iff]
+  · rw [ Matrix.rank ];
+    rw [ finrank_eq_one_iff' ]
+    intro a i₁ i₂ j₁ j₂
+    simp_all only [ne_eq, Subtype.forall, LinearMap.mem_range, Matrix.mulVecBilin_apply, forall_exists_index,
+      Subtype.exists, Submodule.mk_eq_zero, SetLike.mk_smul_mk, Subtype.mk.injEq, forall_apply_eq_imp_iff,
+      exists_and_left, exists_prop]
+    obtain ⟨w, h⟩ := a
+    obtain ⟨left, right⟩ := h
+    obtain ⟨left_1, right⟩ := right
+    obtain ⟨w_1, h⟩ := left_1
+    subst h
+    obtain ⟨ c, hc ⟩ := right ( Pi.single j₁ 1 ) ;
+    obtain ⟨ d, hd ⟩ := right ( Pi.single j₂ 1 ) ;
+    simp_all only [funext_iff, Matrix.mulVec, Matrix.of_apply, Pi.zero_apply, not_forall,
+      Pi.smul_apply, smul_eq_mul, Matrix.mulVec_single, MulOpposite.op_one, one_smul,
+      Matrix.col_apply]
+    rw [ ← hc i₁, ← hd i₁, ← hc i₂, ← hd i₂ ] ; ring
 
 /-- A pure state is separable iff the partial trace on the left is pure. -/
 theorem pure_separable_iff_traceLeft_pure (ψ : Ket (d₁ × d₂)) : IsSeparable (pure ψ) ↔

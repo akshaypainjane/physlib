@@ -355,11 +355,6 @@ lemma supportProj_inner_density (h : σ.M.ker ≤ ρ.M.ker) :
   rw [HermitianMat.inner_comm, HermitianMat.inner_supportProj_of_ker_le h]
   simp
 
---PULLOUT
-@[simp]
-theorem HermitianMat.rpow_zero (A : HermitianMat d ℂ) : A ^ (0 : ℝ) = 1 := by
-  simp [rpow_eq_cfc]
-
 /-
 ⟪ρ.M.conj (σ.M ^ t).mat, σ.M ^ (-2 * t)⟫_ℝ = 1 for density matrices ρ, σ with ker(σ) ≤ ker(ρ).
 -/
@@ -770,53 +765,13 @@ private theorem sandwichedRelRentropy_additive_alpha_one (ρ₁ σ₁ : MState d
     contrapose! h1
     exact (ker_le_of_ker_kron_le_left ρ₁ σ₁ ρ₂ σ₂) h1
 
-open scoped Kronecker in
-omit [DecidableEq d₁] [DecidableEq d₂] in
-lemma HermitianMat.conj_kron
-  (A : Matrix d₁ d₁ 𝕜) (B : Matrix d₂ d₂ 𝕜) (C : HermitianMat d₁ 𝕜) (D : HermitianMat d₂ 𝕜) :
-    conj (A ⊗ₖ B) (C ⊗ₖ D) = conj A C ⊗ₖ conj B D := by
-  ext1
-  simp [conj, Matrix.mul_kronecker_mul, Matrix.conjTranspose_kronecker]
-
-lemma HermitianMat.rpow_diagonal (a : d → ℝ) (r : ℝ) :
-  (diagonal ℂ a) ^ r = diagonal ℂ (fun i => a i ^ r) := by
-    exact cfc_diagonal _ _
-
-private lemma HermitianMat.pow_kron_diagonal
-    (a : d₁ → ℝ) (b : d₂ → ℝ) (r : ℝ) (ha : ∀ i, 0 ≤ a i) (hb : ∀ j, 0 ≤ b j) :
-    ((diagonal ℂ a) ⊗ₖ (diagonal ℂ b)) ^ r =
-    ((diagonal ℂ a) ^ r) ⊗ₖ ((diagonal ℂ b) ^ r) := by
-  simp only [kronecker_diagonal, rpow_diagonal]
-  congr! 2 with x
-  apply Real.mul_rpow (ha x.1) (hb x.2)
-
-open scoped Kronecker Matrix in
-lemma HermitianMat.pow_kron
-    {A : HermitianMat d₁ ℂ} {B : HermitianMat d₂ ℂ} (r : ℝ) (hA : 0 ≤ A) (hB : 0 ≤ B) :
-    (A ⊗ₖ B) ^ r = (A ^ r) ⊗ₖ (B ^ r) := by
-  obtain ⟨U, a, ha, hA⟩ : ∃ U : 𝐔[d₁], ∃ a : d₁ → ℝ, (∀ i, 0 ≤ a i) ∧ A = conj U.val (diagonal ℂ a) := by
-    rw [zero_le_iff] at hA
-    exact ⟨_, _, hA.eigenvalues_nonneg, eq_conj_diagonal A⟩
-  obtain ⟨V, b, hb, hB⟩ : ∃ V : 𝐔[d₂], ∃ b : d₂ → ℝ, (∀ j, 0 ≤ b j) ∧ B = conj V.val (diagonal ℂ b) := by
-    rw [zero_le_iff] at hB
-    exact ⟨_, _, hB.eigenvalues_nonneg, eq_conj_diagonal B⟩
-  have h_kron_r_pow : (A ⊗ₖ B) ^ r = conj (U ⊗ᵤ V).val ((diagonal ℂ a ⊗ₖ diagonal ℂ b) ^ r) := by
-    subst hB hA
-    rw [← rpow_conj_unitary, Matrix.unitary_kron, conj_kron]
-  rw [h_kron_r_pow]
-  subst A B
-  have h_kron_r_pow_diag : (diagonal ℂ a ⊗ₖ diagonal ℂ b) ^ r = ((diagonal ℂ a) ^ r) ⊗ₖ ((diagonal ℂ b) ^ r) := by
-    exact pow_kron_diagonal a b r ha hb
-  rw [h_kron_r_pow_diag, Matrix.unitary_kron]
-  rw [rpow_conj_unitary, rpow_conj_unitary, ← conj_kron]
-
 lemma sandwiched_term_product (ρ₁ σ₁ : MState d₁) (ρ₂ σ₂ : MState d₂) (α β : ℝ) :
     (((ρ₁ ⊗ᴹ ρ₂).M.conj ((σ₁ ⊗ᴹ σ₂).M ^ β).mat) ^ α).trace =
     ((ρ₁.M.conj (σ₁.M ^ β).mat) ^ α).trace * ((ρ₂.M.conj (σ₂.M ^ β).mat) ^ α).trace := by
   simp only [MState.prod]
   rw [← HermitianMat.trace_kronecker]
-  rw [← HermitianMat.pow_kron α ?_ ?_, ← HermitianMat.conj_kron,
-    HermitianMat.pow_kron β σ₁.nonneg σ₂.nonneg, HermitianMat.kronecker_mat]
+  rw [← HermitianMat.rpow_kron α ?_ ?_, ← HermitianMat.conj_kron,
+    HermitianMat.rpow_kron β σ₁.nonneg σ₂.nonneg, HermitianMat.kronecker_mat]
   · exact HermitianMat.conj_nonneg _ ρ₁.nonneg
   · exact HermitianMat.conj_nonneg _ ρ₂.nonneg
 
@@ -931,6 +886,24 @@ theorem frontier_singleton {X : Type*} [TopologicalSpace X] [T1Space X] [Perfect
     (p : X) : frontier {p} = {p} := by
   simp [frontier]
 
+private theorem sandwichedRelRentropy.continuousOn_Ioi_1_aux (ρ σ : MState d) :
+    ContinuousOn (fun (α : ℝ) ↦ ((HermitianMat.conj (σ.M ^ ((1 - α) / (2 * α))).mat) ρ.M ^ α)) (Set.Ioi 1) := by
+  have h_cont : ContinuousOn (fun α : ℝ => (HermitianMat.conj (σ.M ^ ((1 - α) / (2 * α))).mat) ρ.M) (Set.Ioi 1) := by
+    have h_cont : ContinuousOn (fun α : ℝ => (σ.M ^ ((1 - α) / (2 * α))).mat) (Set.Ioi 1) := by
+      have h_cont : ContinuousOn (fun α : ℝ => σ.M ^ ((1 - α) / (2 * α))) (Set.Ioi 1) := by
+        have h_cont : ContinuousOn (fun α : ℝ => (1 - α) / (2 * α)) (Set.Ioi 1) := by
+          exact continuousOn_of_forall_continuousAt fun x hx => ContinuousAt.div ( continuousAt_const.sub continuousAt_id ) ( continuousAt_const.mul continuousAt_id ) ( by linarith [ hx.out ] )
+        have h_cont : ContinuousOn (fun α : ℝ => (σ.M ^ α)) (Set.Iio 0) := by
+          apply_rules [ HermitianMat.continuousOn_rpow_neg ];
+        exact h_cont.comp ‹_› fun x hx => by rw [ Set.mem_Iio ] ; rw [ div_lt_iff₀ ] <;> linarith [ hx.out ] ;
+      exact Continuous.comp_continuousOn ( by continuity ) h_cont;
+    fun_prop;
+  -- Apply the lemma HermitianMat.continuousOn_rpow_joint_nonneg_pos with the given conditions.
+  apply HermitianMat.continuousOn_rpow_joint_nonneg_pos;
+  · exact h_cont;
+  · exact continuousOn_id;
+  · exact fun x hx => zero_lt_one.trans hx;
+
 private theorem sandwichedRelRentropy.continuousOn_Ioi_1 (ρ σ : MState d) :
     ContinuousOn (fun α => D̃_ α(ρ‖σ)) (Set.Ioi 1) := by
   dsimp [SandwichedRelRentropy]
@@ -941,9 +914,8 @@ private theorem sandwichedRelRentropy.continuousOn_Ioi_1 (ρ σ : MState d) :
     · apply (ENNReal.continuous_ofReal).comp_continuousOn
       apply ContinuousOn.div₀
       · apply ContinuousOn.log
-        · apply HermitianMat.trace_Continuous.comp_continuousOn
-          simp only [HermitianMat.conj, AddMonoidHom.coe_mk, ZeroHom.coe_mk]
-          sorry
+        · exact HermitianMat.trace_Continuous.comp_continuousOn
+            (continuousOn_Ioi_1_aux ρ σ)
         · intro x hx
           apply LT.lt.ne'
           grw [← sandwiched_trace_of_gt_1 hρ hx]
@@ -958,14 +930,798 @@ private theorem sandwichedRelRentropy.continuousOn_Ioi_1 (ρ σ : MState d) :
     · clear ρ σ hρ;
       grind only [→ Set.EqOn.eq_of_mem, = Set.mem_Ioi, Set.EqOn, cases Or]
 
+private theorem sandwichedRelRentropy.continuousOn_Ioo_0_1_aux (ρ σ : MState d) :
+    ContinuousOn (fun (α : ℝ) ↦ ((HermitianMat.conj (σ.M ^ ((1 - α) / (2 * α))).mat) ρ.M ^ α)) (Set.Ioo 0 1) := by
+  have h_cont : ContinuousOn (fun α : ℝ => (HermitianMat.conj (σ.M ^ ((1 - α) / (2 * α))).mat) ρ.M) (Set.Ioo 0 1) := by
+    have h_cont : ContinuousOn (fun α : ℝ => (σ.M ^ ((1 - α) / (2 * α))).mat) (Set.Ioo 0 1) := by
+      have h_cont : ContinuousOn (fun α : ℝ => σ.M ^ ((1 - α) / (2 * α))) (Set.Ioo 0 1) := by
+        have h_exp_cont : ContinuousOn (fun α : ℝ => (1 - α) / (2 * α)) (Set.Ioo 0 1) := by
+          exact continuousOn_of_forall_continuousAt fun x hx => ContinuousAt.div ( continuousAt_const.sub continuousAt_id ) ( continuousAt_const.mul continuousAt_id ) ( by linarith [ hx.1 ] )
+        have h_rpow_cont : ContinuousOn (fun α : ℝ => (σ.M ^ α)) (Set.Ioi 0) := by
+          apply_rules [ HermitianMat.continuousOn_rpow_pos ]
+        exact h_rpow_cont.comp h_exp_cont fun x hx => by rw [ Set.mem_Ioi ] ; apply div_pos <;> linarith [ hx.1, hx.2 ]
+      exact Continuous.comp_continuousOn ( by continuity ) h_cont
+    fun_prop
+  apply HermitianMat.continuousOn_rpow_joint_nonneg_pos
+  · exact h_cont
+  · exact continuousOn_id
+  · exact fun x hx => hx.1
+
+/-- Continuity on (0,1): the sandwich relative Rényi entropy is continuous in α on (0,1). -/
+private theorem sandwichedRelRentropy.continuousOn_Ioo_0_1 (ρ σ : MState d) :
+    ContinuousOn (fun α => D̃_ α(ρ‖σ)) (Set.Ioo 0 1) := by
+  dsimp [SandwichedRelRentropy]
+  split_ifs with hρ
+  · simp [← ENNReal.ofReal_eq_coe_nnreal]
+    rw [continuousOn_congr (f := fun α ↦ ENNReal.ofReal
+      (Real.log ((HermitianMat.conj (σ.M ^ ((1 - α) / (2 * α))).mat) ρ.M ^ α).trace / (α - 1)))]
+    · apply (ENNReal.continuous_ofReal).comp_continuousOn
+      apply ContinuousOn.div₀
+      · apply ContinuousOn.log
+        · exact HermitianMat.trace_Continuous.comp_continuousOn
+            (continuousOn_Ioo_0_1_aux ρ σ)
+        · intro x hx
+          exact (sandwiched_trace_pos hρ).ne'
+      · fun_prop
+      · intro x hx; exact sub_ne_zero.mpr (ne_of_lt hx.2)
+    · intro α hα
+      dsimp only
+      rw [if_pos hα.1, if_neg (ne_of_lt hα.2)]
+  · rw [continuousOn_congr (f := fun α ↦ ⊤)]
+    · fun_prop
+    · intro x hx
+      dsimp only
+      simp [hx.1]
+
+private lemma sandwichedRelRentropy.trace_at_one (ρ σ : MState d) :
+    ((ρ.M.conj (σ.M ^ ((1 - (1:ℝ)) / (2 * (1:ℝ)))).mat) ^ (1:ℝ)).trace = 1 := by
+  simp
+
+/-
+For fixed PSD B, the derivative of α ↦ Tr[B^α] at α = 1 is ⟪B, B.log⟫ = Tr[B log B].
+-/
+private lemma hasDerivAt_trace_rpow_at_one (B : HermitianMat d ℂ) (hB : 0 ≤ B) :
+    HasDerivAt (fun α : ℝ => (B ^ α).trace) ⟪B, B.log⟫ 1 := by
+  have h_inner : ⟪B, B.log⟫ = ∑ i, (B.H.eigenvalues i) * Real.log (B.H.eigenvalues i) := by
+    -- By definition of the inner product, we have ⟪B, B.log⟫ = tr(B * B.log).
+    have h_inner_def : ⟪B, B.log⟫ = Matrix.trace (B.mat * B.log.mat) := by
+      simp [ Matrix.trace, Inner.inner ];
+      refine' Finset.sum_congr rfl fun i _ => _;
+      have h_herm : (B * B.log : Matrix d d ℂ).IsHermitian := by
+        have h_comm : Commute (B : Matrix d d ℂ) (B.log : Matrix d d ℂ) := by
+          commutes
+        simp_all [Matrix.IsHermitian]
+        rw [h_comm]
+      have := h_herm.apply i i
+      simp_all [Complex.ext_iff]
+      linarith
+    -- By definition of the trace, we have tr(B * B.log) = ∑ i, B.eigenvalues i * log(B.eigenvalues i).
+    have h_trace : (B.mat * B.log.mat).trace = ∑ i, B.H.eigenvalues i * Real.log (B.H.eigenvalues i) := by
+      have h_trace : (B ^ 1 * B.log.mat).trace = (B.cfc (fun x ↦ x * Real.log x)).trace := by
+        have h_trace : B ^ 1 * B.log.mat = B.cfc (fun x ↦ x * Real.log x) := by
+          have h_log : B ^ 1 * B.log.mat = B.cfc id * B.cfc Real.log := by
+            simp [pow_one, HermitianMat.log]
+          rw [h_log]
+          exact (B.mat_cfc_mul_apply id Real.log).symm
+        rw [h_trace, ← HermitianMat.trace_eq_trace_rc]
+        rfl
+      simp_all [ HermitianMat.trace_cfc_eq ];
+    exact_mod_cast h_inner_def.trans h_trace;
+  have h_deriv : ∀ i, HasDerivAt (fun α : ℝ => (B.H.eigenvalues i) ^ α) (B.H.eigenvalues i * Real.log (B.H.eigenvalues i)) 1 := by
+    intro i
+    by_cases h_pos : 0 < B.H.eigenvalues i;
+    · convert HasDerivAt.rpow ( hasDerivAt_const _ _ ) ( hasDerivAt_id 1 ) h_pos using 1
+      simp only [id_eq, mul_one, sub_self, Real.rpow_zero, Real.rpow_one, one_mul, zero_add]
+    · have h_zero : B.H.eigenvalues i = 0 := by
+        exact le_antisymm ( le_of_not_gt h_pos ) ( by simpa using hB.eigenvalues_nonneg i )
+      simp [h_zero]
+      exact (hasDerivAt_const _ _).congr_of_eventuallyEq (Filter.eventuallyEq_of_mem ( Ioi_mem_nhds zero_lt_one ) fun x hx => Real.zero_rpow hx.out.ne' )
+  simp only [HermitianMat.trace_rpow_eq_sum, ← Finset.sum_apply]
+  convert HasDerivAt.sum fun i _ => h_deriv i using 1
+
+/-
+PROBLEM
+Trace cyclicity for conj: Tr[conj(σ^t, ρ)] = ⟪ρ, σ^{2t}⟫ = Tr[ρ σ^{2t}].
+    Since σ^t is Hermitian: Tr[σ^t ρ σ^t] = Tr[ρ (σ^t)²] = Tr[ρ σ^{2t}].
+PROVIDED SOLUTION
+By definition, (ρ.M.conj (σ.M ^ t).mat).mat = (σ.M ^ t).mat * ρ.M.mat * ((σ.M ^ t).mat)^* (from conj_apply_mat). Since σ.M ^ t is Hermitian, ((σ.M ^ t).mat)^* = (σ.M ^ t).mat (from σ.M ^ t property .H). So the trace is Tr[(σ^t).mat * ρ.mat * (σ^t).mat].
+By Matrix.trace_mul_comm applied to the product ((σ^t).mat * ρ.mat) and (σ^t).mat:
+Tr[(σ^t).mat * ρ.mat * (σ^t).mat] = Tr[(σ^t).mat * (σ^t).mat * ρ.mat].
+Now use mat_rpow_add with σ.nonneg and t + t = 2t (≠ 0 since t ≠ 0): (σ.M ^ (t+t)).mat = (σ.M ^ t).mat * (σ.M ^ t).mat. So the trace becomes Tr[(σ.M ^ (2*t)).mat * ρ.mat].
+By inner_eq_trace_rc: ⟪ρ.M, σ.M ^ (2*t)⟫ = (ρ.M.mat * (σ.M ^ (2*t)).mat).trace.
+By Matrix.trace_mul_comm: Tr[ρ.mat * (σ^{2t}).mat] = Tr[(σ^{2t}).mat * ρ.mat].
+Combine: the conj trace = Tr[(σ^{2t}).mat * ρ.mat] = Tr[ρ.mat * (σ^{2t}).mat] = ⟪ρ, σ^{2t}⟫.
+Note: show t + t = 2 * t by ring, and 2 * t ≠ 0 from ht using two_mul_ne_zero or similar.
+-/
+private lemma trace_conj_eq_inner_rpow {ρ σ : MState d} {t : ℝ} (ht : t ≠ 0) :
+    (ρ.M.conj (σ.M ^ t).mat).trace = ⟪ρ.M, σ.M ^ (2 * t)⟫ := by
+  have h_cyclic : ((σ.M ^ t).mat * ρ.M.mat * (σ.M ^ t).mat).trace = ((σ.M ^ (2 * t)).mat * ρ.M.mat).trace := by
+    -- Since σ.M ^ t is Hermitian, we can use the property that the trace of a product is invariant under cyclic permutations.
+    have h_cyclic : Matrix.trace ((σ.M ^ t).mat * ρ.M.mat * (σ.M ^ t).mat) = Matrix.trace ((σ.M ^ t).mat * (σ.M ^ t).mat * ρ.M.mat) := by
+      rw [ ← Matrix.trace_mul_comm ]
+      simp [ Matrix.mul_assoc ]
+    rw [ h_cyclic, two_mul ]
+    ring_nf
+    have h_exp : (σ.M ^ (t + t)).mat = (σ.M ^ t).mat * (σ.M ^ t).mat := by
+      have h_nonneg : 0 ≤ σ.M := by
+        exact σ.nonneg
+      have h_ne_zero : t + t ≠ 0 := by
+        exact fun h => ht ( by linarith )
+      exact HermitianMat.mat_rpow_add h_nonneg h_ne_zero
+    rw [ mul_two, h_exp ]
+  have h_inner : ⟪ρ.M, σ.M ^ (2 * t)⟫ = ((ρ.M.mat * (σ.M ^ (2 * t)).mat).trace).re := by
+    exact rfl
+  simp_all
+  convert congr_arg Complex.re h_cyclic using 1 ; simp [ HermitianMat.conj ] ; ring!;
+  rw [ Matrix.trace_mul_comm ]
+
+-- The weight of eigenvalue i in the inner product decomposition
+private def eigenWeight (ρ σ : MState d) (i : d) : ℝ :=
+  RCLike.re ((Matrix.vecMul (star (σ.M.H.eigenvectorBasis i : d → ℂ)) ρ.M.mat) ⬝ᵥ (σ.M.H.eigenvectorBasis i : d → ℂ))
+
+private lemma inner_cfc_eq_sum_eigenWeight (ρ σ : MState d) (f : ℝ → ℝ) :
+    ⟪ρ.M, σ.M.cfc f⟫ = ∑ i, f (σ.M.H.eigenvalues i) * eigenWeight ρ σ i := by
+  -- By definition of the inner product in the context of Hermitian matrices, we can expand it using the trace.
+  have h_inner : ⟪ρ.M, σ.M.cfc f⟫ = RCLike.re (Matrix.trace (ρ.M.mat * (σ.M.cfc f).mat)) := by
+    exact rfl;
+  have h_trace : Matrix.trace (ρ.M.mat * (σ.M.cfc f).mat) = ∑ i, f (σ.M.H.eigenvalues i) * (star (σ.M.H.eigenvectorBasis i) ⬝ᵥ ρ.M.mat.mulVec (σ.M.H.eigenvectorBasis i)) := by
+    rw [ Matrix.trace ];
+    have h_cfc_def : (σ.M.cfc f).mat = ∑ i, (f (Matrix.IsHermitian.eigenvalues σ.M.H i)) • Matrix.of (fun x y => (σ.M.H.eigenvectorBasis i x) * (star (σ.M.H.eigenvectorBasis i y))) := by
+      convert σ.M.cfc_toMat_eq_sum_smul_proj f using 1;
+      ext i j; simp [ Matrix.single ] ; ring_nf
+      simp [ Matrix.sum_apply, Matrix.mul_apply, Matrix.conjTranspose_apply, Matrix.of_apply ];
+      refine' Finset.sum_congr rfl fun x _ => _ ; simp [ Finset.sum_ite, Finset.filter_eq, Finset.filter_and ] ; ring_nf
+      rw [ Finset.sum_eq_single x ] <;> aesop;
+    simp [ h_cfc_def, Matrix.mulVec, dotProduct, Finset.mul_sum, mul_left_comm ];
+    simp [ Matrix.sum_apply, Matrix.mul_apply ];
+    rw [ Finset.sum_comm ] ; congr ; ext ; congr ; ext ; congr ; ext ; ring!;
+  simp_all [ eigenWeight ];
+  simp [ Matrix.dotProduct_mulVec ]
+
+private lemma eigenWeight_nonneg (ρ σ : MState d) (i : d) : 0 ≤ eigenWeight ρ σ i := by
+  -- By definition of `eigenWeight`, we have:
+  set v := σ.M.H.eigenvectorBasis i
+  set w := ρ.M.mat.mulVec v
+  have h_eigenWeight : eigenWeight ρ σ i = RCLike.re (star v ⬝ᵥ w) := by
+    unfold eigenWeight;
+    simp +zetaDelta at *;
+    simp [ Matrix.dotProduct_mulVec ]
+  rw [h_eigenWeight];
+  -- Since ρ is positive semi-definite, we have that the inner product of any vector with ρ is non-negative. Hence, we can write:
+  have := ρ.pos
+  obtain ⟨ h₁, h₂ ⟩ := this;
+  have := h₁.2 v;
+  exact this.1.trans (by simp [w])
+
+private lemma eigenWeight_zero_of_eigenvalue_zero {i : d} (hσ : σ.M.ker ≤ ρ.M.ker)
+  (hei : σ.M.H.eigenvalues i = 0) :
+    eigenWeight ρ σ i = 0 := by
+  unfold eigenWeight
+  have h_mulVec_zero : σ.M.mat.mulVec (σ.M.H.eigenvectorBasis i) = 0 := by
+    convert Matrix.IsHermitian.mulVec_eigenvectorBasis σ.M.H i using 1
+    simp [hei]
+  have h_mulVec_zero' : ρ.M.mat.mulVec (σ.M.H.eigenvectorBasis i) = 0 := by
+    exact hσ h_mulVec_zero
+  convert congr_arg ( fun x : d → ℂ => RCLike.re ( star ( σ.M.H.eigenvectorBasis i ) ⬝ᵥ x ) ) h_mulVec_zero' using 1;
+  · simp [Matrix.dotProduct_mulVec]
+  · simp [dotProduct]
+
+/-
+The derivative of u ↦ ⟪ρ, σ^u⟫ at u = 0 is ⟪ρ, σ.log⟫.
+    Use inner_cfc_eq_sum_eigenWeight to write ⟪ρ, σ^u⟫ = ∑ i, q_i^u * eigenWeight ρ σ i,
+    differentiate term by term using HasDerivAt.sum.
+-/
+private lemma hasDerivAt_inner_rpow_at_zero (h : σ.M.ker ≤ ρ.M.ker) :
+    HasDerivAt (fun u : ℝ => ⟪ρ.M, σ.M ^ u⟫) ⟪ρ.M, σ.M.log⟫ 0 := by
+  convert HasDerivAt.congr_of_eventuallyEq ?_ ?_;
+  exact fun u => ∑ i, ( σ.M.H.eigenvalues i ) ^ u * eigenWeight ρ σ i;
+  · have h_deriv : ∀ i, HasDerivAt (fun u : ℝ => (σ.M.H.eigenvalues i) ^ u * eigenWeight ρ σ i) (Real.log (σ.M.H.eigenvalues i) * eigenWeight ρ σ i) 0 := by
+      intro i
+      rcases (σ.eigenvalue_nonneg i).lt_or_eq' with h_pos | h_zero
+      · simp only [h_pos, Real.rpow_def_of_pos, mul_comm]
+        convert ((hasDerivAt_id 0).mul (hasDerivAt_const _ _)).exp.const_mul (eigenWeight ρ σ i ) using 1
+        simp
+      · simp [Real.rpow_def_of_nonpos, mul_comm, h_zero]
+        convert hasDerivAt_const (0 : ℝ) (0 : ℝ) using 1
+        ext1 u
+        split_ifs with hu
+        · simp [eigenWeight_zero_of_eigenvalue_zero h h_zero]
+        · rfl
+    convert HasDerivAt.sum (u := Finset.univ) fun i _ => h_deriv i using 1
+    · ext x : 1
+      simp only [Finset.sum_apply]
+    · exact inner_cfc_eq_sum_eigenWeight ρ σ Real.log
+  · filter_upwards [Metric.ball_mem_nhds 0 zero_lt_one] with u hu
+    exact inner_cfc_eq_sum_eigenWeight ρ σ (· ^ u)
+
+/-  The derivative of α ↦ Tr[ρ σ^((1-α)/α)] at α = 1 is -⟪ρ, log σ⟫.
+    Uses trace cyclic: Tr[σ^t ρ σ^t] = Tr[ρ σ^(2t)].
+    With 2t(α) = (1-α)/α, d/dα (2t) = -1/α², and d/dε σ^ε|_{ε=0} = log σ. -/
+private lemma hasDerivAt_trace_conj_at_one {ρ σ : MState d}
+    (h : σ.M.ker ≤ ρ.M.ker) :
+    HasDerivAt
+      (fun α : ℝ => ((ρ.M.conj (σ.M ^ ((1 - α) / (2 * α))).mat)).trace)
+      (-⟪ρ.M, σ.M.log⟫)
+      1 := by
+  have h_chain : HasDerivAt (fun α : ℝ => ⟪ρ.M, σ.M ^ ((1 - α) / α)⟫) (⟪ρ.M, σ.M.log⟫ * (-1)) 1 := by
+    apply HasDerivAt.comp (h₂ := fun u => ⟪ρ.M, σ.M ^ u⟫) (h := fun α => (1 - α) / α)
+    · simpa using hasDerivAt_inner_rpow_at_zero h
+    · simpa using HasDerivAt.div ( hasDerivAt_id ( 1 : ℝ ) |> HasDerivAt.const_sub 1 ) ( hasDerivAt_id ( 1 : ℝ ) ) ( by norm_num )
+  ring_nf at h_chain
+  apply h_chain.congr_of_eventuallyEq _
+  filter_upwards [ lt_mem_nhds zero_lt_one ] with α hα
+  by_cases h : ( 1 - α ) / ( 2 * α ) = 0
+  · simp [ne_of_gt, hα] at h
+    obtain ⟨⟩ : α = 1 := by linarith
+    simp [*]
+  · simp only [trace_conj_eq_inner_rpow h]
+    ring_nf
+
+/-
+For a differentiable function b with b(1) = c ≥ 0 and b(α) ≥ 0 near α = 1,
+the function α ↦ b(α)^α - b(α) has derivative c * log c at α = 1.
+-/
+private lemma scalar_rpow_cross_term {b : ℝ → ℝ} {c : ℝ}
+    (hb : HasDerivAt b (deriv b 1) 1) (hc : b 1 = c) (hc_pos : 0 < c) :
+    HasDerivAt (fun α => b α ^ α - b α) (c * Real.log c) 1 := by
+  subst c
+  simpa using (hb.rpow (hasDerivAt_id 1) hc_pos).sub hb
+
+/-- For a PSD matrix A, Tr[A^s] - Tr[A] has derivative ⟪A, log A⟫ at s = 1.
+    This generalizes `hasDerivAt_trace_rpow_at_one` to give the derivative of the
+    difference Tr[A^s] - Tr[A], which equals ⟪A, log A⟫ since d/ds Tr[A] = 0. -/
+private lemma hasDerivAt_trace_rpow_sub_trace (A : HermitianMat d ℂ) (hA : 0 ≤ A) :
+    HasDerivAt (fun s : ℝ => (A ^ s).trace - A.trace) ⟪A, A.log⟫ 1 := by
+  simpa using hasDerivAt_trace_rpow_at_one A hA
+
+-- Abbreviation for the "B(α)" matrix appearing in the sandwiched trace.
+private abbrev B_of (ρ σ : MState d) (α : ℝ) : HermitianMat d ℂ :=
+  ρ.M.conj (σ.M ^ ((1 - α) / (2 * α))).mat
+
+-- At α = 1, B(α) = ρ.M since (1-1)/(2·1) = 0 and conj by 1 is identity.
+private lemma B_of_one (ρ σ : MState d) : B_of ρ σ 1 = ρ.M := by
+  simp [B_of, HermitianMat.rpow_zero, HermitianMat.conj_one]
+
+-- B(α) is nonneg for α > 0, because it's a conj of a nonneg matrix.
+private lemma B_of_nonneg (ρ σ : MState d) (α : ℝ) : 0 ≤ B_of ρ σ α := by
+  exact HermitianMat.conj_nonneg _ ρ.nonneg
+
+-- The function g(M) = Tr[M^s] - Tr[M] satisfies g(M) = 0 when s = 1.
+private lemma trace_rpow_sub_trace_at_one (M : HermitianMat d ℂ) :
+    (M ^ (1 : ℝ)).trace - M.trace = 0 := by
+  simp [HermitianMat.rpow_one]
+
+-- The cross term function value at α = 1 is zero.
+private lemma cross_term_at_one (ρ σ : MState d) :
+    ((B_of ρ σ 1) ^ (1 : ℝ)).trace - (B_of ρ σ 1).trace
+    - (ρ.M ^ (1 : ℝ)).trace + 1 = 0 := by
+  simp [B_of_one, HermitianMat.rpow_one, ρ.tr]
+
+/-
+Scalar rpow cross term with just continuity: for a continuous function b with
+  b(1) = c > 0, b(α) > 0 near 1, the function α ↦ b(α)^α - b(α) has derivative
+  c * log c at α = 1. The key insight is that ∂/∂x(x^α - x)|_{α=1} = 0,
+  so the derivative of b doesn't matter.
+-/
+private lemma scalar_rpow_cross_term_of_continuous {b : ℝ → ℝ} {c : ℝ}
+    (hb_cont : ContinuousAt b 1) (hc : b 1 = c) (hc_pos : 0 < c)
+    (hb_pos : ∀ᶠ α in nhds 1, 0 < b α) :
+    HasDerivAt (fun α => b α ^ α - b α) (c * Real.log c) 1 := by
+  rw [ hasDerivAt_iff_tendsto_slope_zero ];
+  -- Use the fact that $b(1 + t)^{1 + t} - b(1 + t)$ can be rewritten as $b(1 + t) \cdot (b(1 + t)^t - 1)$.
+  suffices h_rewrite : Filter.Tendsto (fun t => t⁻¹ * (b (1 + t) * (b (1 + t) ^ t - 1))) (nhdsWithin 0 {0}ᶜ) (nhds (c * Real.log c)) by
+    refine' h_rewrite.congr' _;
+    rw [ Filter.EventuallyEq, eventually_nhdsWithin_iff ];
+    rw [ Metric.eventually_nhds_iff ] at *;
+    obtain ⟨ ε, ε_pos, hε ⟩ := hb_pos; use ε, ε_pos; intros y hy hy'; rw [ Real.rpow_add ( hε ( show Dist.dist ( 1 + y ) 1 < ε from by simpa using hy ) ), Real.rpow_one ]
+    ring_nf
+    norm_num [ hc ] ; ring;
+  -- Use the fact that $b(1 + t) \to c$ as $t \to 0$.
+  have h_b : Filter.Tendsto (fun t => b (1 + t)) (nhdsWithin 0 {0}ᶜ) (nhds c) := by
+    exact hc ▸ hb_cont.tendsto.comp ( tendsto_nhdsWithin_of_tendsto_nhds ( by norm_num [ Filter.Tendsto ] ) );
+  -- Use the fact that $b(1 + t)^t - 1 \sim t \log(b(1 + t))$ as $t \to 0$.
+  have h_exp : Filter.Tendsto (fun t => t⁻¹ * (b (1 + t) ^ t - 1)) (nhdsWithin 0 {0}ᶜ) (nhds (Real.log c)) := by
+    have h_exp : Filter.Tendsto (fun t => (b (1 + t) ^ t - 1) / t) (nhdsWithin 0 {0}ᶜ) (nhds (Real.log c)) := by
+      have h_log : Filter.Tendsto (fun t => (Real.log (b (1 + t)) * t) / t) (nhdsWithin 0 {0}ᶜ) (nhds (Real.log c)) := by
+        exact Filter.Tendsto.congr' ( by filter_upwards [ self_mem_nhdsWithin ] with t ht using by rw [ mul_div_cancel_right₀ _ ht ] ) ( Filter.Tendsto.log h_b hc_pos.ne' )
+      have h_exp : Filter.Tendsto (fun t => (Real.exp (Real.log (b (1 + t)) * t) - 1) / t) (nhdsWithin 0 {0}ᶜ) (nhds (Real.log c)) := by
+        have h_exp : HasDerivAt (fun t => Real.exp (Real.log (b (1 + t)) * t)) (Real.log c) 0 := by
+          have h_log : HasDerivAt (fun t => Real.log (b (1 + t)) * t) (Real.log c) 0 := by
+            rw [ hasDerivAt_iff_tendsto_slope_zero ];
+            simpa [ div_eq_inv_mul ] using h_log
+          convert h_log.exp using 1 ; norm_num [ hc ];
+        simpa [ div_eq_inv_mul ] using h_exp.tendsto_slope_zero;
+      refine' h_exp.congr' _;
+      filter_upwards [ h_b.eventually ( lt_mem_nhds hc_pos ) ] with t ht using by rw [ Real.rpow_def_of_pos ht, mul_comm ] ;
+    simpa only [ div_eq_inv_mul ] using h_exp;
+  convert h_b.mul h_exp using 2 ; ring
+
+/-
+Scalar rpow cross term for the zero case: for continuous b with b(1) = 0,
+  0 ≤ b(α) near 1, the function α ↦ b(α)^α - b(α) has derivative 0 at α = 1.
+  Uses the convention 0 * log 0 = 0.
+-/
+private lemma scalar_rpow_cross_term_of_continuous_zero {b : ℝ → ℝ}
+    (hb_cont : ContinuousAt b 1) (hc : b 1 = 0)
+    (hb_nonneg : ∀ᶠ α in nhds 1, 0 ≤ b α) :
+    HasDerivAt (fun α => b α ^ α - b α) 0 1 := by
+  -- Let's choose any $\epsilon > 0$.
+  have h_eps : ∀ ε > 0, ∃ δ > 0, ∀ α, abs (α - 1) < δ → abs (b α ^ α - b α) ≤ ε * abs (α - 1) := by
+    -- Use the fact that $|b(α)^α - b(α)| ≤ |h| · sqrt(b(α)) · |log b(α)|$ for $0 < b(α) ≤ 1$ and $|h| ≤ 1/2$.
+    have h_bound : ∀ᶠ α in nhds 1, |b α ^ α - b α| ≤ |α - 1| * Real.sqrt (|b α|) * |Real.log (|b α|)| := by
+      have h_bound : ∀ᶠ α in nhds 1, 0 ≤ b α ∧ b α ≤ 1 ∧ |α - 1| ≤ 1 / 2 → |b α ^ α - b α| ≤ |α - 1| * Real.sqrt (b α) * |Real.log (b α)| := by
+        filter_upwards [ hb_nonneg ] with α hα₁ hα₂ ; rcases eq_or_lt_of_le hα₂.1 with hα₃ | hα₃ <;> simp_all [ Real.rpow_def_of_nonneg ] ; ring_nf ;
+        · norm_num [ ← hα₃ ] at *;
+          linarith [ abs_le.mp hα₂ ];
+        · split_ifs <;> simp_all [ne_of_gt]
+          -- Use the fact that $|e^{x} - 1| \leq |x| e^{|x|}$ for any $x$.
+          have h_exp_bound : ∀ x : ℝ, |Real.exp x - 1| ≤ |x| * Real.exp |x| := by
+            intro x; rw [ abs_le ] ; constructor <;> cases abs_cases x <;> simp [ * ] <;> nlinarith [ Real.exp_pos x, Real.exp_neg x, mul_inv_cancel₀ ( ne_of_gt ( Real.exp_pos x ) ), Real.add_one_le_exp x, Real.add_one_le_exp ( -x ), Real.exp_le_exp.2 ( by linarith : x ≤ |x| ), Real.exp_le_exp.2 ( by linarith : -x ≤ |x| ) ] ;
+          -- Apply the exponential bound to $x = \log(b(\alpha)) \cdot (\alpha - 1)$.
+          have h_exp_bound_applied : |Real.exp (Real.log (b α) * (α - 1)) - 1| ≤ |Real.log (b α)| * |α - 1| * Real.exp (|Real.log (b α)| * |α - 1|) := by
+            simpa only [ abs_mul, mul_assoc ] using h_exp_bound ( Real.log ( b α ) * ( α - 1 ) ) |> le_trans <| by simp [ abs_mul, mul_assoc ] ;
+          -- Use the fact that $|b(\alpha)| \leq \sqrt{b(\alpha)}$ for $0 < b(\alpha) \leq 1$.
+          have h_sqrt_bound : |b α| * Real.exp (|Real.log (b α)| * |α - 1|) ≤ Real.sqrt (b α) := by
+            rw [ abs_of_nonneg hα₂.1 ] ; rw [ Real.sqrt_eq_rpow ] ; rw [ ← Real.log_le_log_iff ( by positivity ) ( by positivity ), Real.log_mul ( by positivity ) ( by positivity ), Real.log_rpow ( by positivity ) ] ; ring_nf ; norm_num [ hα₂.1, hα₂.2.1, hα₂.2.2 ] ;
+            cases abs_cases ( Real.log ( b α ) ) <;> cases abs_cases ( -1 + α ) <;> nlinarith [ Real.log_le_sub_one_of_pos hα₃, abs_le.mp hα₂.2.2 ] ;
+          rw [ show Real.exp ( Real.log ( b α ) * α ) = Real.exp ( Real.log ( b α ) * ( α - 1 ) ) * Real.exp ( Real.log ( b α ) ) by rw [ ← Real.exp_add ] ; ring_nf, Real.exp_log hα₃ ];
+          field_simp;
+          rw [ abs_mul ] ; nlinarith [ abs_nonneg ( Real.log ( b α ) ), abs_nonneg ( α - 1 ), abs_nonneg ( b α ), Real.sqrt_nonneg ( b α ), mul_le_mul_of_nonneg_left h_sqrt_bound ( abs_nonneg ( Real.log ( b α ) ) ), mul_le_mul_of_nonneg_left h_sqrt_bound ( abs_nonneg ( α - 1 ) ), mul_le_mul_of_nonneg_left h_sqrt_bound ( abs_nonneg ( b α ) ) ] ;
+      have h_bound : ∀ᶠ α in nhds 1, 0 ≤ b α ∧ b α ≤ 1 ∧ |α - 1| ≤ 1 / 2 := by
+        have h_bound : ∀ᶠ α in nhds 1, 0 ≤ b α ∧ b α ≤ 1 := by
+          filter_upwards [ hb_nonneg, hb_cont.eventually ( Metric.ball_mem_nhds _ zero_lt_one ) ] with α hα₁ hα₂ using ⟨ hα₁, by linarith [ abs_lt.mp hα₂ ] ⟩;
+        filter_upwards [ h_bound, Metric.ball_mem_nhds 1 ( show ( 0 : ℝ ) < 1 / 2 by norm_num ) ] with α hα₁ hα₂ using ⟨ hα₁.1, hα₁.2, by simpa using hα₂.out.le ⟩;
+      filter_upwards [ h_bound, ‹∀ᶠ α in nhds 1, 0 ≤ b α ∧ b α ≤ 1 ∧ |α - 1| ≤ 1 / 2 → |b α ^ α - b α| ≤ |α - 1| * Real.sqrt ( b α ) * |Real.log ( b α )|› ] with α hα₁ hα₂ using by simpa [ abs_of_nonneg hα₁.1 ] using hα₂ hα₁;
+    -- Use the fact that $\sqrt{|b(α)|} \cdot |\log(|b(α)|)| \to 0$ as $b(α) \to 0$.
+    have h_sqrt_log : Filter.Tendsto (fun α => Real.sqrt (|b α|) * |Real.log (|b α|)|) (nhds 1) (nhds 0) := by
+      have h_sqrt_log : Filter.Tendsto (fun x => Real.sqrt x * |Real.log x|) (nhdsWithin 0 (Set.Ioi 0)) (nhds 0) := by
+        have h_sqrt_log : Filter.Tendsto (fun x => Real.sqrt x * Real.log x) (nhdsWithin 0 (Set.Ioi 0)) (nhds 0) := by
+          -- Let $y = \sqrt{x}$, so we can rewrite the limit as $\lim_{y \to 0^+} y \log(y^2) = \lim_{y \to 0^+} 2y \log(y)$.
+          suffices h_log_y : Filter.Tendsto (fun y => 2 * y * Real.log y) (nhdsWithin 0 (Set.Ioi 0)) (nhds 0) by
+            have h_subst : Filter.Tendsto (fun x => 2 * Real.sqrt x * Real.log (Real.sqrt x)) (nhdsWithin 0 (Set.Ioi 0)) (nhds 0) := by
+              exact h_log_y.comp <| Filter.Tendsto.inf ( Real.continuous_sqrt.tendsto' _ _ <| by norm_num ) <| Filter.tendsto_principal_principal.mpr fun x hx => Real.sqrt_pos.mpr hx;
+            generalize_proofs at *; (
+            exact h_subst.congr' ( Filter.eventuallyEq_of_mem self_mem_nhdsWithin fun x hx => by rw [ Real.log_sqrt hx.out.le ] ; ring ) |> fun h => h.trans ( by norm_num ) ;);
+          exact tendsto_nhdsWithin_of_tendsto_nhds ( by simpa [ mul_assoc ] using Filter.Tendsto.const_mul 2 ( Real.continuous_mul_log.tendsto 0 ) ) |> fun h => h.trans ( by norm_num ) ;
+        exact tendsto_zero_iff_norm_tendsto_zero.mpr ( by simpa using h_sqrt_log.norm );
+      have h_sqrt_log : Filter.Tendsto (fun α => Real.sqrt (|b α|) * |Real.log (|b α|)|) (nhdsWithin 1 {α | 0 < |b α|}) (nhds 0) := by
+        refine' h_sqrt_log.comp _;
+        rw [ tendsto_nhdsWithin_iff ];
+        exact ⟨ tendsto_nhdsWithin_of_tendsto_nhds ( by simpa [ hc ] using hb_cont.abs.tendsto ), Filter.eventually_of_mem self_mem_nhdsWithin fun x hx => hx ⟩;
+      rw [ Metric.tendsto_nhdsWithin_nhds ] at h_sqrt_log;
+      exact Metric.tendsto_nhds_nhds.mpr fun ε hε => by rcases h_sqrt_log ε hε with ⟨ δ, hδ, H ⟩ ; exact ⟨ δ, hδ, by intro x hx; by_cases hx' : 0 < |b x| <;> aesop ⟩ ;
+    intro ε hε_pos
+    obtain ⟨δ₁, hδ₁_pos, hδ₁⟩ : ∃ δ₁ > 0, ∀ α, abs (α - 1) < δ₁ → Real.sqrt (|b α|) * |Real.log (|b α|)| < ε := by
+      simpa using Metric.tendsto_nhds_nhds.mp h_sqrt_log ε hε_pos |> fun ⟨ δ₁, hδ₁₁, hδ₁₂ ⟩ => ⟨ δ₁, hδ₁₁, fun α hα => lt_of_abs_lt <| by simpa using hδ₁₂ hα ⟩;
+    obtain ⟨δ₂, hδ₂_pos, hδ₂⟩ : ∃ δ₂ > 0, ∀ α, abs (α - 1) < δ₂ → |b α ^ α - b α| ≤ |α - 1| * Real.sqrt (|b α|) * |Real.log (|b α|)| := by
+      exact Metric.mem_nhds_iff.mp h_bound |> fun ⟨ δ₂, hδ₂_pos, hδ₂ ⟩ => ⟨ δ₂, hδ₂_pos, fun α hα => hδ₂ hα ⟩;
+    exact ⟨ Min.min δ₁ δ₂, lt_min hδ₁_pos hδ₂_pos, fun α hα => le_trans ( hδ₂ α ( lt_of_lt_of_le hα ( min_le_right _ _ ) ) ) ( by nlinarith [ hδ₁ α ( lt_of_lt_of_le hα ( min_le_left _ _ ) ), abs_nonneg ( α - 1 ) ] ) ⟩;
+  rw [ hasDerivAt_iff_isLittleO_nhds_zero ];
+  rw [ Asymptotics.isLittleO_iff ];
+  intro ε hε; rcases h_eps ε hε with ⟨ δ, hδ, H ⟩ ; filter_upwards [ Metric.ball_mem_nhds _ hδ ] with x hx using by simpa [ hc ] using H ( 1 + x ) ( by simpa using hx ) ;
+
+/-- If ker A ≤ ker ρM, then conjugating ρM by the support projection of A gives back ρM.
+    This is because ρM is supported entirely on the support (= range) of A. -/
+private lemma conj_supportProj_eq_of_ker_le (A ρM : HermitianMat d ℂ) (hker : A.ker ≤ ρM.ker) :
+    ρM.conj (A.supportProj).mat = ρM := by
+  have h_conj_support : ρM.mat * A.supportProj.mat = ρM.mat := by
+    apply HermitianMat.mul_supportProj_of_ker_le; assumption;
+  -- Using the conjugate transpose property and the fact that A.supportProj is Hermitian, we can simplify the expression.
+  have h_conj_support : (A.supportProj.mat).conjTranspose * ρM.mat * A.supportProj.mat = ρM.mat := by
+    rw [ ← Matrix.conjTranspose_inj ] at * ; aesop;
+  simp_all [ HermitianMat.conj, Matrix.mul_assoc ]
+
+/-- For a PSD matrix A, the function r ↦ A ^ r converges to A.supportProj
+    as r → 0 through nonzero values. On positive eigenvalues λ, λ^r → 1.
+    On zero eigenvalues, 0^r = 0 for r ≠ 0. So the limit is the support
+    projection (indicator of nonzero eigenvalues). -/
+private lemma rpow_tendsto_supportProj
+    (A : HermitianMat d ℂ)  :
+    Filter.Tendsto (fun r : ℝ => A ^ r) (nhdsWithin 0 {(0 : ℝ)}ᶜ) (nhds A.supportProj) := by
+  -- By definition of $g$, we know that $A.cfc (g r)$ converges to $A.supportProj$ as $r$ approaches $0$.
+  have h_cfc_g_conv : Filter.Tendsto (fun r : ℝ => A.cfc (fun x : ℝ => if r = 0 then (if x = 0 then 0 else 1) else x ^ r)) (nhds 0) (nhds A.supportProj) := by
+    have h_cfc_g_conv : Continuous (fun r : ℝ => A.cfc (fun x : ℝ => if r = 0 then (if x = 0 then 0 else 1) else x ^ r)) := by
+      -- Apply the continuity of the cfc function.
+      have h_cfc_cont : Continuous (fun r : ℝ => A.cfc (fun x : ℝ => if r = 0 then (if x = 0 then 0 else 1) else x ^ r)) := by
+        have h_g_cont : ∀ x : ℝ, Continuous (fun r : ℝ => if r = 0 then (if x = 0 then 0 else 1) else x ^ r) := by
+          intro x
+          by_cases hx : x = 0 <;> simp [hx];
+          · rw [ Metric.continuous_iff ] ; aesop;
+          · rw [ show ( fun r : ℝ => if r = 0 then 1 else x ^ r ) = fun r : ℝ => x ^ r by ext r; by_cases hr : r = 0 <;> simp [ hr ] ] ; exact Continuous.rpow continuous_const continuous_id' <| by continuity;
+        apply_rules [ HermitianMat.continuous_cfc_fun ];
+      convert h_cfc_cont using 1;
+    convert h_cfc_g_conv.tendsto 0 using 2 ; simp [ HermitianMat.supportProj_eq_cfc ];
+  exact Filter.Tendsto.congr' ( Filter.eventuallyEq_of_mem self_mem_nhdsWithin fun x hx => by aesop ) ( h_cfc_g_conv.mono_left inf_le_left )
+
+/-- For PSD matrices A, ρ with A.ker ≤ ρ.ker, the function r ↦ ρ.conj (A ^ r).mat
+    is continuous at r = 0. Even though A ^ r is discontinuous at r = 0 when A
+    has zero eigenvalues, the kernel condition ensures the conj "kills" the
+    discontinuity. -/
+private lemma conj_rpow_continuousAt_zero
+    (A ρM : HermitianMat d ℂ)
+    (hker : A.ker ≤ ρM.ker) :
+    ContinuousAt (fun r : ℝ => ρM.conj (A ^ r).mat) 0 := by
+  have h_conj : Filter.Tendsto (fun r : ℝ => A ^ r) (nhdsWithin 0 {0}ᶜ) (nhds A.supportProj) := by
+    convert rpow_tendsto_supportProj A using 1;
+  have h_conj : Filter.Tendsto (fun r : ℝ => (HermitianMat.conj (A ^ r).mat) ρM) (nhdsWithin 0 {0}ᶜ) (nhds ρM) := by
+    convert Filter.Tendsto.comp ( show Filter.Tendsto ( fun M : { M : Matrix d d ℂ // M.IsHermitian } ↦ ( HermitianMat.conj M.val ) ρM ) ( nhds ( A.supportProj ) ) ( nhds ρM ) from ?_ ) h_conj using 2;
+    convert Continuous.tendsto _ _;
+    · convert conj_supportProj_eq_of_ker_le A ρM hker |> Eq.symm;
+    · fun_prop;
+  rw [ Metric.tendsto_nhdsWithin_nhds ] at *;
+  exact Metric.tendsto_nhds_nhds.mpr fun ε hε => by rcases h_conj ε hε with ⟨ δ, hδ, H ⟩ ; exact ⟨ δ, hδ, by intro x hx; by_cases hx' : x = 0 <;> aesop ⟩ ;
+
+/-
+ContinuousAt for B_of: the function α ↦ B(α) is continuous at α = 1.
+  This requires the kernel condition because σ.M ^ r is discontinuous at r = 0
+  on the kernel of σ. The kernel condition ensures the discontinuity is
+  "killed" by ρ vanishing on σ's kernel.
+-/
+private lemma B_of_continuousAt (ρ σ : MState d) (h : σ.M.ker ≤ ρ.M.ker) :
+    ContinuousAt (B_of ρ σ) 1 := by
+  -- Use the fact that the composition of continuous functions is continuous.
+  have h_cont : ContinuousAt (fun α : ℝ => ρ.M.conj (σ.M ^ ((1 - α) / (2 * α))).mat) 1 := by
+    have h_inner : ContinuousAt (fun r : ℝ => ρ.M.conj (σ.M ^ r).mat) 0 := by
+      -- Apply the hypothesis `h_cont` directly to conclude the proof.
+      exact conj_rpow_continuousAt_zero σ.M ρ.M h
+    have h_exp : ContinuousAt (fun α : ℝ => (1 - α) / (2 * α)) 1 := by
+      exact ContinuousAt.div ( continuousAt_const.sub continuousAt_id ) ( continuousAt_const.mul continuousAt_id ) ( by norm_num )
+    exact ContinuousAt.comp ( by simpa using h_inner ) h_exp |> ContinuousAt.congr <| Filter.eventuallyEq_of_mem ( Ioi_mem_nhds zero_lt_one ) fun x hx ↦ by aesop;
+  exact h_cont
+
+private lemma trace_cfc_sub_le (A : HermitianMat d ℂ) (f g : ℝ → ℝ) :
+    |(A.cfc f).trace - (A.cfc g).trace| ≤
+      (Fintype.card d : ℝ) * (⨆ i, |f (A.H.eigenvalues i) - g (A.H.eigenvalues i)|) := by
+  rw [HermitianMat.trace_cfc_eq, HermitianMat.trace_cfc_eq]
+  convert Finset.abs_sum_le_sum_abs _ Finset.univ |> le_trans <| Finset.sum_le_card_nsmul _ _ _ fun i _ => show |f ( A.H.eigenvalues i ) - g ( A.H.eigenvalues i )| ≤ ⨆ i, |f ( A.H.eigenvalues i ) - g ( A.H.eigenvalues i )| from le_ciSup ( Finite.bddAbove_range fun i => |f ( A.H.eigenvalues i ) - g ( A.H.eigenvalues i )| ) i using 1
+  · simp [← Finset.sum_sub_distrib]
+  · simp
+
+/-- Eigenvalues of M(α) are uniformly bounded near α = 1. -/
+private lemma eigenvalues_bounded_near {M : ℝ → HermitianMat d ℂ}
+    (hM_nonneg : ∀ᶠ α in nhds 1, 0 ≤ M α)
+    (hM_cont : ContinuousAt M 1) :
+    ∃ K > 0, ∀ᶠ α in nhds 1, ∀ i, 0 ≤ (M α).H.eigenvalues i ∧ (M α).H.eigenvalues i ≤ K := by
+  have h_op_norm_bound : ∃ K > 0, ∀ᶠ α in nhds 1, ‖M α‖ ≤ K := by
+    exact ⟨ ‖M 1‖ + 1, by positivity, hM_cont.norm.eventually ( ge_mem_nhds ( lt_add_one _ ) ) ⟩
+  have h_eigenvalue_bound : ∀ᶠ α in nhds 1, ∀ i, 0 ≤ (M α).H.eigenvalues i ∧ (M α).H.eigenvalues i ≤ ‖M α‖ := by
+    have h_eigenvalue_bound : ∀ᶠ α in nhds 1, ∀ i, |(M α).H.eigenvalues i| ≤ ‖M α‖ := by
+      filter_upwards [ hM_nonneg, h_op_norm_bound.choose_spec.2 ] with α hα₁ hα₂ i
+      exact HermitianMat.eigenvalue_norm_le (M α) i
+    filter_upwards [ h_eigenvalue_bound, hM_nonneg ] with α hα hα' i
+    exact ⟨ hα' |> fun h => by simpa using h.eigenvalues_nonneg i, le_of_abs_le ( hα i ) ⟩
+  exact ⟨ h_op_norm_bound.choose, h_op_norm_bound.choose_spec.1, h_eigenvalue_bound.and ( h_op_norm_bound.choose_spec.2 ) |> fun h => h.mono fun α hα i => ⟨ hα.1 i |>.1, hα.1 i |>.2.trans ( hα.2 ) ⟩ ⟩
+
+/-
+Uniform convergence of (x^{1+h} - x)/h to x * log x on [0, K] as h → 0.
+This is the uniform version of the derivative of s ↦ x^s at s = 1.
+-/
+set_option maxHeartbeats 800000 in
+private lemma rpow_slope_tendsto_uniformly (K : ℝ) :
+    ∀ ε > 0, ∃ δ > 0, ∀ h : ℝ, 0 < |h| → |h| < δ →
+    ∀ x ∈ Set.Icc 0 K, |(x ^ (1 + h) - x) / h - x * Real.log x| < ε := by
+  intro ε ε_pos
+  obtain ⟨δ₁, δ₁_pos, hδ₁⟩ : ∃ δ₁ > 0, ∀ x ∈ Set.Icc 0 K, 0 < x → x < δ₁ → |x * Real.log x| < ε / 4 ∧ ∀ h, 0 < |h| → |h| < 1 / 2 → |(x ^ (1 + h) - x) / h| < ε / 4 := by
+    obtain ⟨δ₁, δ₁_pos, hδ₁⟩ : ∃ δ₁ > 0, ∀ x ∈ Set.Icc 0 K, 0 < x → x < δ₁ → |x * Real.log x| < ε / 4 := by
+      have h_cont : Filter.Tendsto (fun x => x * Real.log x) (nhdsWithin 0 (Set.Ioi 0)) (nhds 0) := by
+        exact tendsto_nhdsWithin_of_tendsto_nhds ( by simpa using Real.continuous_mul_log.tendsto 0 );
+      have := Metric.tendsto_nhdsWithin_nhds.mp h_cont ( ε / 4 ) ( by linarith );
+      exact ⟨ this.choose, this.choose_spec.1, fun x hx₁ hx₂ hx₃ => by simpa [ abs_mul ] using this.choose_spec.2 hx₂ ( by simpa [ abs_of_pos hx₂ ] using hx₃ ) ⟩;
+    have h_bound : ∃ δ₁ > 0, ∀ x ∈ Set.Icc 0 K, 0 < x → x < δ₁ → ∀ h, 0 < |h| → |h| < 1 / 2 → |x ^ (1 + h) - x| ≤ |h| * x * (|Real.log x| + 1) * Real.exp (|h| * (|Real.log x| + 1)) := by
+      have h_bound : ∀ x ∈ Set.Icc 0 K, 0 < x → ∀ h : ℝ, 0 < |h| → |h| < 1 / 2 → |x ^ (1 + h) - x| ≤ |h| * x * (|Real.log x| + 1) * Real.exp (|h| * (|Real.log x| + 1)) := by
+        intros x hx hx_pos h hh_pos hh_lt_half
+        have h_exp_bound : |Real.exp (h * Real.log x) - 1| ≤ |h| * |Real.log x| * Real.exp (|h| * |Real.log x|) := by
+          have h_exp_bound : ∀ y : ℝ, |Real.exp y - 1| ≤ |y| * Real.exp (|y|) := by
+            intro y; rw [ abs_le ] ; constructor <;> cases abs_cases y <;> simp [ * ];
+            · nlinarith [ Real.add_one_le_exp y ];
+            · nlinarith [ Real.exp_pos y, Real.exp_neg y, mul_inv_cancel₀ ( ne_of_gt ( Real.exp_pos y ) ), Real.add_one_le_exp y, Real.add_one_le_exp ( -y ) ];
+            · nlinarith [ Real.exp_pos y, Real.exp_neg y, mul_inv_cancel₀ ( ne_of_gt ( Real.exp_pos y ) ), Real.add_one_le_exp y, Real.add_one_le_exp ( -y ) ];
+            · nlinarith [ Real.exp_pos y, Real.exp_neg y, mul_inv_cancel₀ ( ne_of_gt ( Real.exp_pos y ) ), Real.add_one_le_exp y, Real.add_one_le_exp ( -y ) ];
+          simpa only [ abs_mul ] using h_exp_bound ( h * Real.log x );
+        rw [ Real.rpow_add hx_pos, Real.rpow_one ];
+        rw [ Real.rpow_def_of_pos hx_pos ];
+        rw [ show x * Real.exp ( Real.log x * h ) - x = x * ( Real.exp ( h * Real.log x ) - 1 ) by ring_nf ]
+        rw [ abs_mul, abs_of_nonneg hx_pos.le ]
+        refine' le_trans ( mul_le_mul_of_nonneg_left h_exp_bound hx_pos.le ) _
+        ring_nf
+        exact le_add_of_le_of_nonneg ( mul_le_mul_of_nonneg_left ( Real.exp_le_exp.mpr ( by nlinarith [ abs_nonneg h, abs_nonneg ( Real.log x ) ] ) ) ( by positivity ) ) ( by positivity );
+      exact ⟨ δ₁, δ₁_pos, fun x hx hx' hx'' h hh hh' => h_bound x hx hx' h hh hh' ⟩;
+    obtain ⟨δ₂, δ₂_pos, hδ₂⟩ : ∃ δ₂ > 0, ∀ x ∈ Set.Icc 0 K, 0 < x → x < δ₂ → x * (|Real.log x| + 1) * Real.exp (1 / 2 * (|Real.log x| + 1)) < ε / 4 := by
+      have h_bound : Filter.Tendsto (fun x => x * (|Real.log x| + 1) * Real.exp (1 / 2 * (|Real.log x| + 1))) (nhdsWithin 0 (Set.Ioi 0)) (nhds 0) := by
+        -- Let $y = -\log x$, so we can rewrite the limit as $y \to \infty$.
+        suffices h_log : Filter.Tendsto (fun y => Real.exp (-y) * (y + 1) * Real.exp ((y + 1) / 2)) Filter.atTop (nhds 0) by
+          have h_subst : Filter.Tendsto (fun x => Real.exp (-(-Real.log x)) * ((-Real.log x) + 1) * Real.exp ((-Real.log x + 1) / 2)) (nhdsWithin 0 (Set.Ioi 0)) (nhds 0) := by
+            exact h_log.comp ( Filter.tendsto_neg_atBot_atTop.comp ( Real.tendsto_log_nhdsNE_zero.mono_left <| nhdsWithin_mono _ <| by norm_num ) );
+          refine' h_subst.congr' _;
+          filter_upwards [ Ioo_mem_nhdsGT_of_mem ⟨ le_rfl, zero_lt_one ⟩ ] with x hx
+          rw [ abs_of_nonpos ( Real.log_nonpos hx.1.le hx.2.le ) ]
+          rw [ neg_neg, Real.exp_log hx.1 ]
+          ring_nf
+        -- We can factor out $e^{-y/2}$ and use the fact that $e^{-y/2} \to 0$ as $y \to \infty$.
+        suffices h_factor : Filter.Tendsto (fun y => Real.exp (-y / 2) * (y + 1)) Filter.atTop (nhds 0) by
+          convert h_factor.const_mul ( Real.exp ( 1 / 2 ) ) using 2 <;> ring_nf
+          norm_num [ mul_assoc, ← Real.exp_add ] ; ring_nf
+        -- Let $z = \frac{y}{2}$, so we can rewrite the limit as $z \to \infty$.
+        suffices h_z : Filter.Tendsto (fun z => Real.exp (-z) * (2 * z + 1)) Filter.atTop (nhds 0) by
+          convert h_z.comp ( Filter.tendsto_id.atTop_mul_const ( by norm_num : 0 < ( 2⁻¹ : ℝ ) ) ) using 2 ; norm_num ; ring_nf
+        have := Real.tendsto_pow_mul_exp_neg_atTop_nhds_zero 1;
+        convert this.const_mul 2 |> Filter.Tendsto.add <| Real.tendsto_exp_atBot.comp <| Filter.tendsto_neg_atTop_atBot using 2 <;> norm_num
+        ring;
+      have := Metric.tendsto_nhdsWithin_nhds.mp h_bound ( ε / 4 ) ( by linarith );
+      obtain ⟨ δ₂, δ₂_pos, H ⟩ := this; exact ⟨ δ₂, δ₂_pos, fun x hx₁ hx₂ hx₃ => by linarith [ abs_lt.mp ( H hx₂ ( by simpa [ abs_of_pos hx₂ ] using hx₃ ) ) ] ⟩ ;
+    obtain ⟨δ₃, δ₃_pos, hδ₃⟩ : ∃ δ₃ > 0, ∀ x ∈ Set.Icc 0 K, 0 < x → x < δ₃ → ∀ h, 0 < |h| → |h| < 1 / 2 → |(x ^ (1 + h) - x) / h| ≤ x * (|Real.log x| + 1) * Real.exp (|h| * (|Real.log x| + 1)) := by
+      obtain ⟨ δ₃, δ₃_pos, hδ₃ ⟩ := h_bound;
+      exact ⟨ δ₃, δ₃_pos, fun x hx hx' hx'' h hh hh' => by rw [ abs_div, div_le_iff₀ ( by positivity ) ] ; convert hδ₃ x hx hx' hx'' h hh hh' using 1 ; ring ⟩;
+    refine' ⟨ Min.min δ₁ ( Min.min δ₂ δ₃ ), lt_min δ₁_pos ( lt_min δ₂_pos δ₃_pos ), fun x hx hx' hx'' => ⟨ hδ₁ x hx hx' ( lt_of_lt_of_le hx'' ( min_le_left _ _ ) ), fun h hh₁ hh₂ => lt_of_le_of_lt ( hδ₃ x hx hx' ( lt_of_lt_of_le hx'' ( min_le_right _ _ |> le_trans <| min_le_right _ _ ) ) h hh₁ hh₂ ) _ ⟩ ⟩;
+    exact lt_of_le_of_lt ( mul_le_mul_of_nonneg_left ( Real.exp_le_exp.mpr <| mul_le_mul_of_nonneg_right hh₂.le <| by positivity ) <| by positivity ) <| hδ₂ x hx hx' <| lt_of_lt_of_le hx'' <| min_le_right _ _ |> le_trans <| min_le_left _ _;
+  obtain ⟨δ₂, δ₂_pos, hδ₂⟩ : ∃ δ₂ > 0, ∀ x ∈ Set.Icc δ₁ K, ∀ h, 0 < |h| → |h| < δ₂ → |(x ^ (1 + h) - x) / h - x * Real.log x| < ε / 4 := by
+    have h_mean_value : ∀ x ∈ Set.Icc δ₁ K, ∀ h, 0 < |h| → |h| < 1 / 2 → |(x ^ (1 + h) - x) / h - x * Real.log x| ≤ |h| * x * (Real.log x) ^ 2 * Real.exp (|h| * |Real.log x|) := by
+      intros x hx h h_pos h_lt
+      have h_mean_value : |(x ^ h - 1) / h - Real.log x| ≤ |h| * (Real.log x) ^ 2 * Real.exp (|h| * |Real.log x|) := by
+        -- Applying the inequality |e^y - 1 - y| ≤ |y|^2 e^|y| with y = h * Real.log x.
+        have h_exp_ineq : ∀ y : ℝ, |Real.exp y - 1 - y| ≤ |y|^2 * Real.exp |y| := by
+          intro y; rw [ abs_le ] ; constructor <;> cases abs_cases y <;> simp [ * ];
+          · nlinarith [ Real.add_one_le_exp y, Real.exp_pos y ];
+          · nlinarith [ Real.add_one_le_exp y, Real.add_one_le_exp ( -y ), Real.exp_pos y, Real.exp_pos ( -y ) ];
+          · -- Using the Taylor series expansion of $e^y$, we have $e^y \leq 1 + y + y^2 e^y$ for $y \geq 0$.
+            have h_taylor : ∀ y : ℝ, 0 ≤ y → Real.exp y ≤ 1 + y + y^2 * Real.exp y := by
+              intro y hy; nlinarith [ Real.exp_pos y, Real.exp_neg y, mul_inv_cancel₀ ( ne_of_gt ( Real.exp_pos y ) ), Real.add_one_le_exp y, Real.add_one_le_exp ( -y ), mul_nonneg hy ( Real.exp_nonneg y ), mul_nonneg hy ( Real.exp_nonneg ( -y ) ) ] ;
+            linarith [ h_taylor y ( by linarith ) ];
+          · nlinarith [ Real.exp_pos y, Real.exp_neg y, mul_inv_cancel₀ ( ne_of_gt ( Real.exp_pos y ) ), Real.add_one_le_exp y, Real.add_one_le_exp ( -y ) ];
+        convert mul_le_mul_of_nonneg_left ( h_exp_ineq ( h * Real.log x ) ) ( inv_nonneg.mpr h_pos.le ) using 1 <;> norm_num [ Real.rpow_def_of_pos ( show 0 < x from lt_of_lt_of_le δ₁_pos hx.1 ), mul_comm ] ; ring_nf
+        · rw [ ← abs_inv, ← abs_mul ] ; ring_nf;
+          by_cases hh : h = 0 <;> aesop;
+        · simp [ sq, mul_assoc, mul_comm, mul_left_comm, h_pos.ne' ];
+      convert mul_le_mul_of_nonneg_left h_mean_value ( show 0 ≤ x by linarith [ hx.1 ] ) using 1 <;> ring_nf
+      rw [ show x ^ ( 1 + h ) * h⁻¹ + ( - ( x * h⁻¹ ) - x * Real.log x ) = x * ( -h⁻¹ + ( h⁻¹ * x ^ h - Real.log x ) ) by rw [ Real.rpow_add ( by linarith [ hx.1 ] ), Real.rpow_one ] ; ring ] ; rw [ abs_mul, abs_of_nonneg ( by linarith [ hx.1 ] : 0 ≤ x ) ] ;
+    -- Choose δ₂ such that |h| * x * (Real.log x) ^ 2 * Real.exp (|h| * |Real.log x|) < ε / 4 for all x ∈ [δ₁, K] and |h| < δ₂.
+    obtain ⟨δ₂, δ₂_pos, hδ₂⟩ : ∃ δ₂ > 0, ∀ x ∈ Set.Icc δ₁ K, ∀ h, 0 < |h| → |h| < δ₂ → |h| * x * (Real.log x) ^ 2 * Real.exp (|h| * |Real.log x|) < ε / 4 := by
+      -- Since $x * (\log x)^2 * \exp(|h| * |\log x|)$ is continuous on the compact interval $[\delta₁, K]$, it is bounded.
+      obtain ⟨M, hM⟩ : ∃ M > 0, ∀ x ∈ Set.Icc δ₁ K, ∀ h, 0 < |h| → |h| < 1 / 2 → x * (Real.log x) ^ 2 * Real.exp (|h| * |Real.log x|) ≤ M := by
+        have h_cont : ContinuousOn (fun x => x * (Real.log x) ^ 2 * Real.exp (1 / 2 * |Real.log x|)) (Set.Icc δ₁ K) := by
+          exact ContinuousOn.mul ( ContinuousOn.mul continuousOn_id ( ContinuousOn.pow ( Real.continuousOn_log.mono ( by exact fun x hx => ne_of_gt <| lt_of_lt_of_le δ₁_pos hx.1 ) ) _ ) ) ( ContinuousOn.rexp <| ContinuousOn.mul continuousOn_const <| ContinuousOn.abs <| Real.continuousOn_log.mono ( by exact fun x hx => ne_of_gt <| lt_of_lt_of_le δ₁_pos hx.1 ) );
+        obtain ⟨ M, hM ⟩ := IsCompact.exists_bound_of_continuousOn ( CompactIccSpace.isCompact_Icc ) h_cont;
+        norm_num +zetaDelta at *;
+        exact ⟨ Max.max M 1, by positivity, fun x hx₁ hx₂ h hh₁ hh₂ => le_trans ( by rw [ abs_of_nonneg ( by linarith : 0 ≤ x ) ] ; exact mul_le_mul_of_nonneg_left ( Real.exp_le_exp.mpr <| by nlinarith [ abs_nonneg ( Real.log x ) ] ) <| by nlinarith [ abs_nonneg ( Real.log x ) ] ) <| le_trans ( hM x hx₁ hx₂ ) <| le_max_left _ _ ⟩;
+      exact ⟨ Min.min ( 1 / 2 ) ( ε / 4 / M ), lt_min ( by norm_num ) ( div_pos ( by linarith ) hM.1 ), fun x hx h hh₁ hh₂ => by nlinarith [ min_le_left ( 1 / 2 ) ( ε / 4 / M ), min_le_right ( 1 / 2 ) ( ε / 4 / M ), mul_div_cancel₀ ( ε / 4 ) hM.1.ne', abs_nonneg h, hM.2 x hx h hh₁ ( lt_of_lt_of_le hh₂ ( min_le_left _ _ ) ), mul_le_mul_of_nonneg_left ( hM.2 x hx h hh₁ ( lt_of_lt_of_le hh₂ ( min_le_left _ _ ) ) ) ( abs_nonneg h ) ] ⟩;
+    exact ⟨ Min.min δ₂ ( 1 / 2 ), lt_min δ₂_pos ( by norm_num ), fun x hx h hh₁ hh₂ => lt_of_le_of_lt ( h_mean_value x hx h hh₁ ( lt_of_lt_of_le hh₂ ( min_le_right _ _ ) ) ) ( hδ₂ x hx h hh₁ ( lt_of_lt_of_le hh₂ ( min_le_left _ _ ) ) ) ⟩;
+  refine' ⟨ Min.min ( 1 / 2 ) δ₂, lt_min ( by positivity ) δ₂_pos, fun h hh₁ hh₂ x hx => _ ⟩ ; cases lt_or_ge x δ₁ <;> simp_all [ abs_lt ];
+  · cases lt_or_eq_of_le hx.1 <;> simp_all [ abs_of_nonneg ];
+    · constructor <;> cases abs_cases ( Real.log x ) <;> nlinarith [ hδ₁ x hx.1 hx.2 ‹_› ‹_›, hδ₁ x hx.1 hx.2 ‹_› ‹_› |>.2 h hh₁ hh₂.1.1 hh₂.1.2 ];
+    · by_cases h : 1 + h = 0 <;> simp_all [ division_def ] ; linarith [ Real.log_le_sub_one_of_pos ( show 0 < ε by linarith ) ] ;
+      norm_num [ ← ‹0 = x› ] at * ; aesop;
+  · constructor <;> linarith [ hδ₂ x ‹_› hx.2 h hh₁ hh₂.2.1 hh₂.2.2 ]
+
+/-
+CFC trace continuity: if M → ρ.M and f is continuous on [0,∞),
+then Tr[(M α).cfc(f)] → Tr[ρ.M.cfc(f)].
+-/
+private lemma trace_cfc_tendsto_of_tendsto (f : ℝ → ℝ)
+    (hf : ContinuousOn f (Set.Ici 0))
+    {M : ℝ → HermitianMat d ℂ}
+    (hM_cont : ContinuousAt M 1) (hM_nonneg : ∀ᶠ α in nhds 1, 0 ≤ M α)
+    (hM_one : M 1 = ρ.M) :
+    Filter.Tendsto (fun α => ((M α).cfc f).trace) (nhds 1) (nhds ((ρ.M.cfc f).trace)) := by
+  have h_cfc_cont : ContinuousWithinAt (fun A : HermitianMat d ℂ => A.cfc f) {A : HermitianMat d ℂ | 0 ≤ A} ρ := by
+    have h_cont : ContinuousOn (fun A : HermitianMat d ℂ => A.cfc f) {A : HermitianMat d ℂ | 0 ≤ A} := by
+      have h_cont_trace : ContinuousOn (fun A : HermitianMat d ℂ => (A.cfc f)) {A : HermitianMat d ℂ | 0 ≤ A} := by
+        have h_cont_cfc : ContinuousOn (fun A : HermitianMat d ℂ => A.cfc f) {A : HermitianMat d ℂ | spectrum ℝ A.mat ⊆ Set.Ici 0} := by
+          intro A hA
+          exact HermitianMat.continuousWithinAt_cfc_of_continuousOn hf hA
+        have h_spectrum_subset : ∀ A : HermitianMat d ℂ, 0 ≤ A → spectrum ℝ A.mat ⊆ Set.Ici 0 := by
+          intro A hA
+          exact (HermitianMat.posSemidef_iff_spectrum_Ici A).mp hA
+        exact h_cont_cfc.mono fun A hA => h_spectrum_subset A hA
+      exact h_cont_trace
+    exact h_cont _ ( by simp [ ρ.2 ] ) |> ContinuousWithinAt.mono <| Set.Subset.refl _;
+  have h_trace_cont : Continuous (fun A : HermitianMat d ℂ => A.trace) := by
+    exact HermitianMat.trace_Continuous;
+  have h_comp_cont : Filter.Tendsto (fun α => (M α).cfc f) (nhds 1) (nhds ((ρ : HermitianMat d ℂ).cfc f)) := by
+    convert h_cfc_cont.tendsto.comp _ using 2;
+    exact tendsto_nhdsWithin_iff.mpr ⟨ hM_cont.tendsto.trans ( by simp [ hM_one ] ), hM_nonneg ⟩;
+  exact h_trace_cont.continuousAt.tendsto.comp h_comp_cont
+
+/-
+The remainder term r(1+h)/h → 0 where
+`r(α) = Tr[M(α)^α] - Tr[M(α)] - Tr[ρ.M^α] + Tr[ρ.M]`
+-/
+set_option maxHeartbeats 800000 in
+private lemma cross_term_slope_tendsto_zero
+    {M : ℝ → HermitianMat d ℂ}
+    (hM_nonneg : ∀ᶠ α in nhds 1, 0 ≤ M α)
+    (hM_cont : ContinuousAt M 1)
+    (hM_one : M 1 = ρ.M) :
+    Filter.Tendsto
+      (fun h : ℝ => ((M (1 + h) ^ (1 + h)).trace - (M (1 + h)).trace
+                    - (ρ.M ^ (1 + h)).trace + ρ.M.trace) / h)
+      (nhdsWithin 0 {0}ᶜ)
+      (nhds 0) := by
+  obtain ⟨ K, hK_pos, hK ⟩ := eigenvalues_bounded_near hM_nonneg hM_cont;
+  clear hK_pos
+  -- Let $G_h(x) = \frac{x^{1+h} - x}{h}$ for $h \neq 0$ and $G_0(x) = x \log x$.
+  set Gh : ℝ → ℝ → ℝ := fun h x => if h = 0 then x * Real.log x else (x ^ (1 + h) - x) / h;
+  -- Using the triangle inequality decomposition with $G_0(x) = x \log x$, we get:
+  have h_triangle : Filter.Tendsto (fun h => (∑ i, Gh h ((M (1 + h)).H.eigenvalues i)) - (∑ i, Gh h (ρ.M.H.eigenvalues i))) (nhdsWithin 0 {0}ᶜ) (nhds 0) := by
+    -- By the properties of the trace and the continuity of $G_h$, we can bound the difference.
+    have h_bound : ∀ ε > 0, ∃ δ > 0, ∀ h : ℝ, 0 < |h| → |h| < δ → ∀ x ∈ Set.Icc 0 K, |Gh h x - x * Real.log x| < ε := by
+      intro ε ε_pos
+      obtain ⟨δ, δ_pos, hδ⟩ : ∃ δ > 0, ∀ h : ℝ, 0 < |h| → |h| < δ → ∀ x ∈ Set.Icc 0 K, |(x ^ (1 + h) - x) / h - x * Real.log x| < ε := by
+        have := rpow_slope_tendsto_uniformly K ε ε_pos; aesop;
+      use δ, δ_pos
+      intro h hh_pos hh_lt
+      aesop;
+    -- Using the bound, we can show that the difference tends to zero.
+    have h_diff_zero : Filter.Tendsto (fun h => ∑ i, (Gh h ((M (1 + h)).H.eigenvalues i) - (M (1 + h)).H.eigenvalues i * Real.log ((M (1 + h)).H.eigenvalues i))) (nhdsWithin 0 {0}ᶜ) (nhds 0) ∧ Filter.Tendsto (fun h => ∑ i, (Gh h (ρ.M.H.eigenvalues i) - ρ.M.H.eigenvalues i * Real.log (ρ.M.H.eigenvalues i))) (nhdsWithin 0 {0}ᶜ) (nhds 0) := by
+      constructor;
+      · have h_diff_zero : ∀ ε > 0, ∃ δ > 0, ∀ h : ℝ, 0 < |h| → |h| < δ → ∀ i, |Gh h ((M (1 + h)).H.eigenvalues i) - (M (1 + h)).H.eigenvalues i * Real.log ((M (1 + h)).H.eigenvalues i)| < ε := by
+          intro ε hε_pos
+          obtain ⟨δ, hδ_pos, hδ⟩ := h_bound ε hε_pos
+          obtain ⟨δ', hδ'_pos, hδ'⟩ : ∃ δ' > 0, ∀ h : ℝ, |h| < δ' → ∀ i, 0 ≤ (M (1 + h)).H.eigenvalues i ∧ (M (1 + h)).H.eigenvalues i ≤ K := by
+            rcases Metric.mem_nhds_iff.mp hK with ⟨ δ', hδ'_pos, hδ' ⟩;
+            exact ⟨ δ', hδ'_pos, fun h hh i => hδ' ( mem_ball_iff_norm.mpr <| by simpa using hh ) i ⟩;
+          exact ⟨ Min.min δ δ', lt_min hδ_pos hδ'_pos, fun h hh₁ hh₂ i => hδ h hh₁ ( lt_of_lt_of_le hh₂ ( min_le_left _ _ ) ) _ ( hδ' h ( lt_of_lt_of_le hh₂ ( min_le_right _ _ ) ) i ) ⟩;
+        rw [ Metric.tendsto_nhdsWithin_nhds ];
+        intro ε hε_pos
+        obtain ⟨δ, hδ_pos, hδ⟩ := h_diff_zero (ε / (Fintype.card d + 1)) (by
+        positivity);
+        refine' ⟨ δ, hδ_pos, fun x hx hx' => _ ⟩;
+        simp +zetaDelta at *;
+        rw [ if_neg hx ];
+        rw [ ← Finset.sum_sub_distrib ];
+        exact lt_of_le_of_lt ( Finset.abs_sum_le_sum_abs _ _ ) ( lt_of_le_of_lt ( Finset.sum_le_sum fun i _ => le_of_lt ( by simpa [ hx ] using hδ x hx hx' i ) ) ( by norm_num; nlinarith [ mul_div_cancel₀ ε ( by positivity : ( Fintype.card d + 1 : ℝ ) ≠ 0 ) ] ) );
+      · rw [ Metric.tendsto_nhdsWithin_nhds ];
+        intro ε ε_pos; rcases h_bound ( ε / ( Fintype.card d + 1 ) ) ( div_pos ε_pos ( Nat.cast_add_one_pos _ ) ) with ⟨ δ, δ_pos, H ⟩ ; use δ, δ_pos; intro x hx hx'; simp_all [ dist_eq_norm ] ;
+        rw [ ← Finset.sum_sub_distrib ];
+        refine' lt_of_le_of_lt ( Finset.abs_sum_le_sum_abs _ _ ) _;
+        refine' lt_of_le_of_lt ( Finset.sum_le_sum fun i _ => le_of_lt ( H x hx hx' _ _ _ ) ) _;
+        · have := hK i; have := this.1.self_of_nhds; aesop;
+        · exact hK i |>.2.self_of_nhds |> fun h => by simpa [ hM_one ] using h;
+        · simp [ div_eq_mul_inv ];
+          nlinarith [ mul_inv_cancel_left₀ ( by positivity : ( Fintype.card d : ℝ ) + 1 ≠ 0 ) ε ];
+    have h_diff_zero : Filter.Tendsto (fun h => ∑ i, ((M (1 + h)).H.eigenvalues i * Real.log ((M (1 + h)).H.eigenvalues i)) - ∑ i, (ρ.M.H.eigenvalues i * Real.log (ρ.M.H.eigenvalues i))) (nhdsWithin 0 {0}ᶜ) (nhds 0) := by
+      have h_diff_zero : Filter.Tendsto (fun h => ((M (1 + h)).cfc (fun x => x * Real.log x)).trace - (ρ.M.cfc (fun x => x * Real.log x)).trace) (nhdsWithin 0 {0}ᶜ) (nhds 0) := by
+        have h_diff_zero : Filter.Tendsto (fun h => ((M (1 + h)).cfc (fun x => x * Real.log x)).trace) (nhdsWithin 0 {0}ᶜ) (nhds ((ρ.M.cfc (fun x => x * Real.log x)).trace)) := by
+          have h_diff_zero : Filter.Tendsto (fun α => ((M α).cfc (fun x => x * Real.log x)).trace) (nhds 1) (nhds ((ρ.M.cfc (fun x => x * Real.log x)).trace)) := by
+            convert trace_cfc_tendsto_of_tendsto _ _ _ _ _ using 1;
+            · exact Continuous.continuousOn ( Real.continuous_mul_log );
+            · exact hM_cont;
+            · exact hM_nonneg;
+            · exact hM_one;
+          exact h_diff_zero.comp ( tendsto_nhdsWithin_of_tendsto_nhds ( by norm_num [ Filter.Tendsto ] ) );
+        simpa using h_diff_zero.sub_const ( ( ρ.M.cfc fun x => x * Real.log x ).trace );
+      convert h_diff_zero using 2;
+      rw [ HermitianMat.trace_cfc_eq, HermitianMat.trace_cfc_eq ];
+    convert h_diff_zero.add ( ‹Filter.Tendsto ( fun h => ∑ i, ( Gh h ( ( M ( 1 + h ) ).H.eigenvalues i ) - ( M ( 1 + h ) ).H.eigenvalues i * Real.log ( ( M ( 1 + h ) ).H.eigenvalues i ) ) ) ( nhdsWithin 0 { 0 } ᶜ ) ( nhds 0 ) ∧ Filter.Tendsto ( fun h => ∑ i, ( Gh h ( ρ.M.H.eigenvalues i ) - ρ.M.H.eigenvalues i * Real.log ( ρ.M.H.eigenvalues i ) ) ) ( nhdsWithin 0 { 0 } ᶜ ) ( nhds 0 ) ›.1.sub ‹Filter.Tendsto ( fun h => ∑ i, ( Gh h ( ( M ( 1 + h ) ).H.eigenvalues i ) - ( M ( 1 + h ) ).H.eigenvalues i * Real.log ( ( M ( 1 + h ) ).H.eigenvalues i ) ) ) ( nhdsWithin 0 { 0 } ᶜ ) ( nhds 0 ) ∧ Filter.Tendsto ( fun h => ∑ i, ( Gh h ( ρ.M.H.eigenvalues i ) - ρ.M.H.eigenvalues i * Real.log ( ρ.M.H.eigenvalues i ) ) ) ( nhdsWithin 0 { 0 } ᶜ ) ( nhds 0 ) ›.2 ) using 2 <;> simp [ Finset.sum_sub_distrib ] ; ring;
+  refine' h_triangle.congr' _;
+  rw [ Filter.EventuallyEq, eventually_nhdsWithin_iff ];
+  rw [ Metric.eventually_nhds_iff ] at *;
+  obtain ⟨ ε, ε_pos, hε ⟩ := hK; use ε, ε_pos; intro y hy hy'; simp_all [ div_eq_inv_mul] ;
+  have h_trace_rpow : ∀ (A : HermitianMat d ℂ) (p : ℝ), (A ^ p).trace = ∑ i, (A.H.eigenvalues i) ^ p := by
+    exact fun A p => HermitianMat.trace_rpow_eq_sum A p;
+  have := h_trace_rpow ( M ( 1 + y ) ) 1; have := h_trace_rpow ( ρ : HermitianMat d ℂ ) 1; simp_all
+  simp +zetaDelta at *;
+  simp [ ← this, div_eq_inv_mul, mul_sub, hy' ];
+  simp [ ← Finset.mul_sum _ _ _, this.symm ]
+  ring
+
+/-- For a differentiable family of PSD matrices M(α) with M(1) having eigenvalues p_i,
+    the function α ↦ Tr[M(α)^α] - Tr[M(α)] has derivative ⟪M(1), M(1).log⟫ at α = 1.
+    This is because at α = 1, the function x^s - x has zero x-derivative (since d/dx(x^1) = 1),
+    so only the s-derivative contributes, giving the same answer as for fixed eigenvalues. -/
+private lemma hasDerivAt_trace_rpow_sub_trace_variable_base
+    {M : ℝ → HermitianMat d ℂ}
+    (hM_nonneg : ∀ᶠ α in nhds 1, 0 ≤ M α)
+    (hM_cont : ContinuousAt M 1)
+    (hM_one : M 1 = ρ.M) :
+    HasDerivAt (fun α : ℝ => (M α ^ α).trace - (M α).trace) ⟪ρ.M, ρ.M.log⟫ 1 := by
+  have h_deriv : HasDerivAt (fun α : ℝ => ((M α) ^ α).trace - (M α).trace - ((ρ.M) ^ α).trace + ρ.M.trace) 0 1 := by
+    convert hasDerivAt_iff_tendsto_slope_zero.mpr _ using 1
+    convert cross_term_slope_tendsto_zero hM_nonneg hM_cont hM_one using 2 ; norm_num [ hM_one ] ; ring!
+  convert h_deriv.add ( hasDerivAt_trace_rpow_sub_trace ρ.M ρ.nonneg ) using 1 <;> norm_num
+  ring_nf
+  ext; norm_num; ring
+
+/-- The cross term in the derivative decomposition vanishes: the function
+    α ↦ Tr[B(α)^α] - Tr[B(α)] - Tr[ρ^α] + 1 has derivative 0 at α = 1.
+    This is because at α=1, B^1 = B, so ∂/∂B Tr[B^α] = Tr[·] (the trace is linear),
+    making the cross term (variation in B times variation in α) vanish. -/
+private lemma rpow_trace_cross_term_vanishes {ρ σ : MState d}
+    (h : σ.M.ker ≤ ρ.M.ker) :
+    HasDerivAt
+      (fun α : ℝ => ((ρ.M.conj (σ.M ^ ((1 - α) / (2 * α))).mat) ^ α).trace
+        - (ρ.M.conj (σ.M ^ ((1 - α) / (2 * α))).mat).trace
+        - (ρ.M ^ α).trace + 1)
+      0
+      1 := by
+  have h_cross_term : HasDerivAt (fun α : ℝ => ((ρ.M.conj (σ.M ^ ((1 - α) / (2 * α))).mat) ^ α).trace - (ρ.M.conj (σ.M ^ ((1 - α) / (2 * α))).mat).trace) ⟪ρ.M, ρ.M.log⟫ 1 ∧ HasDerivAt (fun α : ℝ => (ρ.M ^ α).trace) ⟪ρ.M, ρ.M.log⟫ 1 := by
+    apply And.intro;
+    · convert hasDerivAt_trace_rpow_sub_trace_variable_base _ _ _ using 1;
+      · exact Filter.Eventually.of_forall fun α => B_of_nonneg ρ σ α;
+      · convert B_of_continuousAt ρ σ h using 1;
+      · simp [ HermitianMat.conj ];
+    · convert hasDerivAt_trace_rpow_at_one ρ.M ( by exact ρ.nonneg ) using 1
+  convert HasDerivAt.add ( HasDerivAt.sub h_cross_term.1 h_cross_term.2 ) ( hasDerivAt_const _ _ ) using 1
+  ring
+
+private theorem sandwichedRelRentropy.hasDerivAt_trace_at_one {ρ σ : MState d}
+    (h : σ.M.ker ≤ ρ.M.ker) :
+    HasDerivAt
+      (fun α : ℝ => ((ρ.M.conj (σ.M ^ ((1 - α) / (2 * α))).mat) ^ α).trace)
+      ⟪ρ.M, ρ.M.log - σ.M.log⟫
+      1 := by
+  have h_deriv :=
+    have h_cross_term := rpow_trace_cross_term_vanishes h
+    have h_conj := hasDerivAt_trace_conj_at_one h
+    have h_rpow := hasDerivAt_trace_rpow_at_one ρ.M ρ.nonneg
+    (h_cross_term.add (h_conj.add h_rpow)).sub (hasDerivAt_const 1 1)
+  convert h_deriv using 2
+  · simp only [Pi.sub_apply, Pi.add_apply]
+    ring
+  · simp only [inner_sub_right]
+    ring
+
+/--
+The key limit: as α → 1, log(Tr[(ρ.conj σ^t)^α]) / (α-1) → ⟪ρ, log ρ - log σ⟫,
+    where t = (1-α)/(2α). Derived from hasDerivAt_trace_at_one via L'Hôpital
+    (or equivalently, log(1+x)/x → 1 and (f(α)-1)/(α-1) → f'(1)).
+-/
+private theorem sandwichedRelRentropy.limit_at_one (ρ σ : MState d)
+    (h : σ.M.ker ≤ ρ.M.ker) :
+    Filter.Tendsto
+      (fun α : ℝ ↦ ((ρ.M.conj (σ.M ^ ((1 - α) / (2 * α))).mat) ^ α).trace.log / (α - 1))
+      (nhdsWithin 1 (Set.Ioi 0 \ {1}))
+      (nhds ⟪ρ.M, ρ.M.log - σ.M.log⟫) := by
+  have h_log_approx : HasDerivAt (fun α : ℝ ↦ Real.log (((ρ.M.conj (σ.M ^ ((1 - α) / (2 * α))).mat) ^ α).trace)) (⟪ρ.M, ρ.M.log - σ.M.log⟫) 1 := by
+    have h_deriv := sandwichedRelRentropy.hasDerivAt_trace_at_one h
+    convert h_deriv.log (by simp) using 1
+    simp
+  rw [hasDerivAt_iff_tendsto_slope] at h_log_approx
+  convert h_log_approx.mono_left (nhdsWithin_mono _ _) using 2
+  · norm_num [ div_eq_inv_mul, slope_def_field ]
+  · simp
+
+/-- Continuity at 1: the sandwich relative Rényi entropy is continuous at α = 1. -/
+private theorem sandwichedRelRentropy.continuousAt_1 (ρ σ : MState d) :
+    ContinuousWithinAt (fun α => D̃_ α(ρ‖σ)) (Set.Ioi 0) 1 := by
+  by_cases h : σ.M.ker ≤ ρ.M.ker
+  · simp only [ContinuousWithinAt, SandwichedRelRentropy, dif_pos h, zero_lt_one, if_true]
+    -- Use the fact that the limit of the real-valued function is the inner product.
+    have h_real_limit : Filter.Tendsto (fun α : ℝ => if α = 1 then ⟪ρ.M, ρ.M.log - σ.M.log⟫ else Real.log ((HermitianMat.conj (σ.M ^ ((1 - α) / (2 * α))).mat) ρ.M ^ α).trace / (α - 1)) (nhdsWithin 1 (Set.Ioi 0)) (nhds ⟪ρ.M, ρ.M.log - σ.M.log⟫) := by
+      have h_real_limit : Filter.Tendsto (fun α : ℝ => Real.log ((HermitianMat.conj (σ.M ^ ((1 - α) / (2 * α))).mat) ρ.M ^ α).trace / (α - 1)) (nhdsWithin 1 (Set.Ioi 0 \ {1})) (nhds ⟪ρ.M, ρ.M.log - σ.M.log⟫) := by
+        exact sandwichedRelRentropy.limit_at_one ρ σ h
+      rw [ Metric.tendsto_nhdsWithin_nhds ] at *
+      intro ε hε
+      rcases h_real_limit ε hε with ⟨δ, hδ, H⟩
+      use δ, hδ
+      intro x hx₁ hx₂
+      by_cases hx₃ : x = 1 <;> simp [*]
+    -- Since the real-valued function tends to the inner product, the ENNReal version should also tend to the same limit because the ENNReal conversion is continuous.
+    have h_ennreal_limit : Filter.Tendsto (fun α : ℝ => ENNReal.ofReal (if α = 1 then ⟪ρ.M, ρ.M.log - σ.M.log⟫ else Real.log ((HermitianMat.conj (σ.M ^ ((1 - α) / (2 * α))).mat) ρ.M ^ α).trace / (α - 1))) (nhdsWithin 1 (Set.Ioi 0)) (nhds (ENNReal.ofReal ⟪ρ.M, ρ.M.log - σ.M.log⟫)) := by
+      exact (ENNReal.tendsto_ofReal h_real_limit).comp Filter.tendsto_id
+    convert h_ennreal_limit.congr' _ using 2
+    · symm
+      apply ENNReal.ofReal_eq_coe_nnreal
+    · filter_upwards [self_mem_nhdsWithin] with α (hα : 0 < α)
+      simp only [ENNReal.ofReal, ENNReal.coe_inj, hα, ↓reduceDIte]
+      exact Real.toNNReal_of_nonneg _
+  · apply tendsto_const_nhds.congr'
+    filter_upwards [self_mem_nhdsWithin] with α hα
+    simp only [SandwichedRelRentropy, Set.mem_Ioi.mp hα, zero_lt_one, dif_neg h]
+
 @[fun_prop]
 theorem sandwichedRelRentropy.continuousOn (ρ σ : MState d) :
     ContinuousOn (fun α => D̃_ α(ρ‖σ)) (Set.Ioi 0) := by
   --If this turns out too hard, we just need `ContinousAt f 1`.
   --If that's still too hard, we really _just_ need that `(𝓝[>] 1).Tendsto f (𝓝 (f 1))`.
-  sorry
+  intro α hα
+  rcases lt_trichotomy α 1 with hα1 | rfl | hα1
+  · have h := sandwichedRelRentropy.continuousOn_Ioo_0_1 ρ σ
+    exact (h.continuousAt (Ioo_mem_nhds hα hα1)).continuousWithinAt
+  · exact sandwichedRelRentropy.continuousAt_1 ρ σ
+  · have h := sandwichedRelRentropy.continuousOn_Ioi_1 ρ σ
+    exact (h.continuousAt (Ioi_mem_nhds hα1)).continuousWithinAt
 
-/-- Quantum relative entropy as `Tr[ρ (log ρ - log σ)]` when supports are correct. -/
+/-- Quantum relative entropy as `Tr[ρ (log ρ - log σ)]` when supports are contained. -/
 theorem qRelativeEnt_ker {ρ σ : MState d} (h : σ.M.ker ≤ ρ.M.ker) :
     𝐃(ρ‖σ).toEReal = ⟪ρ.M, ρ.M.log - σ.M.log⟫ := by
   simp [qRelativeEnt, SandwichedRelRentropy, h, EReal.coe_nnreal_eq_coe_real]
@@ -1067,58 +1823,6 @@ private lemma approxLog_tendsto_at_pos {t : ℝ} (ht : 0 < t) :
   unfold approxLog
   rw [max_eq_left (by rw [← Real.log_le_log_iff (by positivity) (by positivity)]; linarith [Nat.le_ceil (-Real.log t), show (N : ℝ) ≥ ⌈-Real.log t⌉₊ + 1 by exact_mod_cast hN, Real.log_exp (-N)])]
 
--- The weight of eigenvalue i in the inner product decomposition
-private def eigenWeight (ρ σ : MState d) (i : d) : ℝ :=
-  RCLike.re ((Matrix.vecMul (star (σ.M.H.eigenvectorBasis i : d → ℂ)) ρ.M.mat) ⬝ᵥ (σ.M.H.eigenvectorBasis i : d → ℂ))
-
-private lemma inner_cfc_eq_sum_eigenWeight (ρ σ : MState d) (f : ℝ → ℝ) :
-    ⟪ρ.M, σ.M.cfc f⟫ = ∑ i, f (σ.M.H.eigenvalues i) * eigenWeight ρ σ i := by
-  -- By definition of the inner product in the context of Hermitian matrices, we can expand it using the trace.
-  have h_inner : ⟪ρ.M, σ.M.cfc f⟫ = RCLike.re (Matrix.trace (ρ.M.mat * (σ.M.cfc f).mat)) := by
-    exact rfl;
-  have h_trace : Matrix.trace (ρ.M.mat * (σ.M.cfc f).mat) = ∑ i, f (σ.M.H.eigenvalues i) * (star (σ.M.H.eigenvectorBasis i) ⬝ᵥ ρ.M.mat.mulVec (σ.M.H.eigenvectorBasis i)) := by
-    rw [ Matrix.trace ];
-    have h_cfc_def : (σ.M.cfc f).mat = ∑ i, (f (Matrix.IsHermitian.eigenvalues σ.M.H i)) • Matrix.of (fun x y => (σ.M.H.eigenvectorBasis i x) * (star (σ.M.H.eigenvectorBasis i y))) := by
-      convert σ.M.cfc_toMat_eq_sum_smul_proj f using 1;
-      ext i j; simp [ Matrix.single ] ; ring_nf
-      simp [ Matrix.sum_apply, Matrix.mul_apply, Matrix.conjTranspose_apply, Matrix.of_apply ];
-      refine' Finset.sum_congr rfl fun x _ => _ ; simp [ Finset.sum_ite, Finset.filter_eq, Finset.filter_and ] ; ring_nf
-      rw [ Finset.sum_eq_single x ] <;> aesop;
-    simp [ h_cfc_def, Matrix.mulVec, dotProduct, Finset.mul_sum, mul_left_comm ];
-    simp [ Matrix.sum_apply, Matrix.mul_apply ];
-    rw [ Finset.sum_comm ] ; congr ; ext ; congr ; ext ; congr ; ext ; ring!;
-  simp_all [ eigenWeight ];
-  simp [ Matrix.dotProduct_mulVec ]
-
-private lemma eigenWeight_nonneg (ρ σ : MState d) (i : d) :
-    0 ≤ eigenWeight ρ σ i := by
-  -- By definition of `eigenWeight`, we have:
-  set v := σ.M.H.eigenvectorBasis i
-  set w := ρ.M.mat.mulVec v
-  have h_eigenWeight : eigenWeight ρ σ i = RCLike.re (star v ⬝ᵥ w) := by
-    unfold eigenWeight;
-    simp +zetaDelta at *;
-    simp [ Matrix.dotProduct_mulVec ]
-  rw [h_eigenWeight];
-  -- Since ρ is positive semi-definite, we have that the inner product of any vector with ρ is non-negative. Hence, we can write:
-  have := ρ.pos
-  obtain ⟨ h₁, h₂ ⟩ := this;
-  have := h₁.2 v;
-  exact this.1.trans (by simp [w])
-
-private lemma eigenWeight_zero_of_eigenvalue_zero (ρ σ : MState d) (i : d)
-    (hσ : σ.M.ker ≤ ρ.M.ker) (hei : σ.M.H.eigenvalues i = 0) :
-    eigenWeight ρ σ i = 0 := by
-  unfold eigenWeight;
-  -- Since $\lambda_i = 0$, we have $\sigma.M.mat.mulVec (σ.M.H.eigenvectorBasis i) = 0$.
-  have h_mulVec_zero : σ.M.mat.mulVec (σ.M.H.eigenvectorBasis i) = 0 := by
-    convert Matrix.IsHermitian.mulVec_eigenvectorBasis σ.M.H i using 1 ; aesop;
-  have h_mulVec_zero' : ρ.M.mat.mulVec (σ.M.H.eigenvectorBasis i) = 0 := by
-    exact hσ h_mulVec_zero;
-  convert congr_arg ( fun x : d → ℂ => RCLike.re ( star ( σ.M.H.eigenvectorBasis i ) ⬝ᵥ x ) ) h_mulVec_zero' using 1;
-  · simp [ Matrix.dotProduct_mulVec ];
-  · simp [ dotProduct ]
-
 open ComplexOrder in
 private lemma inner_cfc_approxLog_ge (ρ σ : MState d) (N : ℕ) (hσ : σ.M.ker ≤ ρ.M.ker) :
     ⟪ρ.M, σ.M.log⟫ ≤ ⟪ρ.M, σ.M.cfc (approxLog N)⟫ := by
@@ -1130,7 +1834,7 @@ private lemma inner_cfc_approxLog_ge (ρ σ : MState d) (N : ℕ) (hσ : σ.M.ke
     rwa [HermitianMat.le_iff, sub_zero] at h
   have hei_nn : 0 ≤ σ.M.H.eigenvalues i := hpsd.eigenvalues_nonneg i
   by_cases hei : σ.M.H.eigenvalues i = 0
-  · rw [eigenWeight_zero_of_eigenvalue_zero ρ σ i hσ hei, mul_zero, mul_zero]
+  · rw [eigenWeight_zero_of_eigenvalue_zero hσ hei, mul_zero, mul_zero]
   · exact mul_le_mul_of_nonneg_right (approxLog_ge_log_pos (lt_of_le_of_ne hei_nn (Ne.symm hei)) N)
       (eigenWeight_nonneg ρ σ i)
 
@@ -1147,20 +1851,19 @@ private lemma tendsto_inner_cfc_approxLog (ρ x : MState d) (hx : x.M.ker ≤ ρ
     rwa [HermitianMat.le_iff, sub_zero] at h
   have hei_nn : 0 ≤ x.M.H.eigenvalues i := hpsd.eigenvalues_nonneg i
   by_cases hei : x.M.H.eigenvalues i = 0
-  · simp [eigenWeight_zero_of_eigenvalue_zero ρ x i hx hei]
+  · simp [eigenWeight_zero_of_eigenvalue_zero hx hei]
   · exact (approxLog_tendsto_at_pos (lt_of_le_of_ne hei_nn (Ne.symm hei))).mul_const _
 
-lemma inner_log_bounded_near (ρ x : MState d) (hx : x.M.ker ≤ ρ.M.ker)
-    (y : ℝ) (hy : ⟪ρ.M, x.M.log⟫ < y) :
-    ∀ᶠ σ in nhds x, σ.M.ker ≤ ρ.M.ker → ⟪ρ.M, σ.M.log⟫ < y := by
-  have h_tendsto := tendsto_inner_cfc_approxLog ρ x hx
-  obtain ⟨N, hN⟩ : ∃ N : ℕ, ⟪ρ.M, x.M.cfc (approxLog N)⟫ < y := by
+lemma inner_log_bounded_near (hx : σ.M.ker ≤ ρ.M.ker) {y : ℝ} (hy : ⟪ρ.M, σ.M.log⟫ < y) :
+    ∀ᶠ x in nhds σ, x.M.ker ≤ ρ.M.ker → ⟪ρ.M, x.M.log⟫ < y := by
+  have h_tendsto := tendsto_inner_cfc_approxLog ρ σ hx
+  obtain ⟨N, hN⟩ : ∃ N : ℕ, ⟪ρ.M, σ.M.cfc (approxLog N)⟫ < y := by
     by_contra h
     push_neg at h
     exact absurd (lt_of_lt_of_le hy (ge_of_tendsto h_tendsto (Filter.Eventually.of_forall h)))
       (lt_irrefl _)
   have h_cont := continuous_inner_cfc_approxLog ρ N
-  have h_lt : ∀ᶠ σ in nhds x, ⟪ρ.M, σ.M.cfc (approxLog N)⟫ < y :=
+  have h_lt : ∀ᶠ x in nhds σ, ⟪ρ.M, x.M.cfc (approxLog N)⟫ < y :=
     h_cont.continuousAt.eventually (gt_mem_nhds hN)
   filter_upwards [h_lt] with σ hσ_lt hσ_ker
   exact lt_of_le_of_lt (inner_cfc_approxLog_ge ρ σ N hσ_ker) hσ_lt
@@ -1177,11 +1880,9 @@ private lemma eigenWeight_eq_zero_iff (ρ x : MState d) (i : d) :
     eigenWeight ρ x i = 0 ↔ (x.M.H.eigenvectorBasis i : EuclideanSpace ℂ d) ∈ ρ.M.ker := by
   have h_forward : eigenWeight ρ x i = 0 → (x.M.H.eigenvectorBasis i : d → ℂ) ∈ ρ.M.ker := by
     unfold eigenWeight
-    generalize_proofs at *;
     intro h_zero
     have h_inner : star (x.M.H.eigenvectorBasis i : d → ℂ) ⬝ᵥ (ρ.M.mat.mulVec (x.M.H.eigenvectorBasis i : d → ℂ)) = 0 := by
       convert h_zero using 1
-      generalize_proofs at *;
       have h_real : ∀ (v : d → ℂ), star v ⬝ᵥ (ρ.M.mat.mulVec v) = star (star v ⬝ᵥ (ρ.M.mat.mulVec v)) := by
         intro v
         have h_real : star v ⬝ᵥ (ρ.M.mat.mulVec v) = star (star v ⬝ᵥ (ρ.M.mat.mulVec v)) := by
@@ -1205,9 +1906,7 @@ private lemma eigenWeight_eq_zero_iff (ρ x : MState d) (i : d) :
         linarith! [ h_real ] ;
       rw [ h_real ] ; norm_cast; simp [Matrix.dotProduct_mulVec ]
     exact HermitianMat.mem_ker_of_inner_mulVec_zero ρ.2 _ h_inner
-  generalize_proofs at *;
-  refine' ⟨ h_forward, fun h => _ ⟩
-  generalize_proofs at *;
+  refine ⟨h_forward, fun h ↦ ?_⟩
   -- Since ρ e_i = 0, we have e_i^* ρ e_i = 0.
   have h_zero : (Matrix.vecMul (star (x.M.H.eigenvectorBasis i : d → ℂ)) ρ.M.mat) ⬝ᵥ (x.M.H.eigenvectorBasis i : d → ℂ) = 0 := by
     have h_zero : ρ.M.mat.mulVec (x.M.H.eigenvectorBasis i : d → ℂ) = 0 := by
@@ -1220,8 +1919,8 @@ private lemma eigenWeight_eq_zero_iff (ρ x : MState d) (i : d) :
 
 private lemma ker_le_iff_eigenWeight_zero (ρ x : MState d) :
     x.M.ker ≤ ρ.M.ker ↔ ∀ i, x.M.H.eigenvalues i = 0 → eigenWeight ρ x i = 0 := by
-  constructor;
-  · exact fun h i hi => eigenWeight_zero_of_eigenvalue_zero ρ x i h hi;
+  constructor
+  · exact fun h i ↦ eigenWeight_zero_of_eigenvalue_zero h
   · intro h v hv
     obtain ⟨w, hw⟩ : ∃ w : d → ℂ, v = ∑ i, w i • x.M.H.eigenvectorBasis i := by
       exact ⟨ _, Eq.symm ( x.M.H.eigenvectorBasis.sum_repr v ) ⟩;
@@ -1270,7 +1969,7 @@ private lemma inner_cfc_approxLog_tendsto_bot (ρ x : MState d) (hx : ¬(x.M.ker
   · rw [ inner_cfc_eq_sum_eigenWeight, Finset.sum_filter_add_sum_filter_not ];
   · apply tendsto_finset_sum
     intro i hi
-    exact Filter.Tendsto.mul ( by exact ( approxLog_tendsto_at_pos ( show 0 < x.M.H.eigenvalues i from lt_of_le_of_ne (x.eigenvalue_nonneg i) (Ne.symm (by aesop))))) tendsto_const_nhds;
+    exact Filter.Tendsto.mul ((approxLog_tendsto_at_pos ( show 0 < x.M.H.eigenvalues i from lt_of_le_of_ne (x.eigenvalue_nonneg i) (Ne.symm (by aesop))))) tendsto_const_nhds
 
 end lowerSemicontinuous_2
 
@@ -1284,35 +1983,31 @@ theorem qRelativeEnt_lowerSemicontinuous_2 (ρ x : MState d) (hx : ¬(x.M.ker �
       have h_inner_lt_y : Filter.Tendsto (fun N : ℕ => ⟪ρ.M, ρ.M.log⟫ - ⟪ρ.M, x.M.cfc (approxLog N)⟫) Filter.atTop Filter.atTop := by
         exact Filter.Tendsto.add_atTop tendsto_const_nhds ( Filter.tendsto_neg_atBot_atTop.comp ( inner_cfc_approxLog_tendsto_bot ρ x hx ) ) |> Filter.Tendsto.congr ( by aesop ) ;
       convert h_inner_lt_y using 1
-      ext
-      simp [ inner_sub_right ]
+      ext1 N
+      simp [inner_sub_right]
     obtain ⟨N, hN⟩ : ∃ N : ℕ, ⟪ρ.M, ρ.M.log - x.M.cfc (approxLog N)⟫ > y.toReal := by
-      exact ( h_inner_lt_y.eventually_gt_atTop _ ) |> fun h => h.exists
+      exact (h_inner_lt_y.eventually_gt_atTop _ ).exists
     have h_cont : Continuous (fun σ : MState d => ⟪ρ.M, ρ.M.log - σ.M.cfc (approxLog N)⟫) := by
-      have h_cont : Continuous (fun σ : MState d => ⟪ρ.M, σ.M.cfc (approxLog N)⟫) := by
-        apply_rules [ continuous_inner_cfc_approxLog ]
-      convert h_cont.neg.add continuous_const using 2 ; simp [ inner_sub_right ] ; ring!;
+      simp only [inner_sub_right]
+      exact continuous_const.sub (continuous_inner_cfc_approxLog ρ N)
     have h_cont : ∀ᶠ x' in nhds x, ⟪ρ.M, ρ.M.log - x'.M.cfc (approxLog N)⟫ > y.toReal := by
       exact h_cont.continuousAt.eventually ( lt_mem_nhds hN ) |> fun h => h.mono fun x' hx' => hx' |> fun hx'' => by simpa using hx'';
-    filter_upwards [ h_cont ] with x' hx' hx''
+    filter_upwards [h_cont] with x' hx' hx''
     apply lt_of_lt_of_le hx'
     have h_inner_le : ⟪ρ.M, x'.M.log⟫ ≤ ⟪ρ.M, x'.M.cfc (approxLog N)⟫ := by
-      -- Apply the hypothesis `h_inner_le` with the given `N` and the fact that `x'.M.ker ≤ ρ.M.ker`.
-      apply inner_cfc_approxLog_ge ρ x' N hx''
-    convert sub_le_sub_left h_inner_le _ using 1
-    · ring_nf
-      rw [ inner_sub_right ];
-    · rw [ inner_sub_right ]
+      exact inner_cfc_approxLog_ge ρ x' N hx''
+    rw [inner_sub_right, inner_sub_right]
+    exact sub_le_sub_left h_inner_le _
   filter_upwards [ h_inner_lt_y ] with x' hx';
   split_ifs <;> simp_all [ ENNReal.toReal ];
-  · -- Since $y.toNNReal$ is the real part of $y$, and we have $y.toNNReal < ⟪ρ, ρ.log - x'.log⟫_ℝ$, it follows that $y < ⟪ρ, ρ.log - x'.log⟫_ℝ$.
-    have h_y_lt_inner : y.toNNReal < ⟪ρ.M, ρ.M.log - x'.M.log⟫ := by
-      exact hx'
-    convert ENNReal.ofReal_lt_ofReal_iff ( show 0 < ⟪ρ.M, ρ.M.log - x'.M.log⟫ from lt_of_le_of_lt ( by positivity ) h_y_lt_inner ) |>.2 h_y_lt_inner using 1;
-    cases y <;> simp [ ENNReal.ofReal ] at *;
-    rw [ ← NNReal.coe_lt_coe, Real.toNNReal_of_nonneg ( le_of_lt ( lt_of_le_of_lt ( by positivity ) h_y_lt_inner ) ) ];
-    norm_num [ ← ENNReal.ofReal_coe_nnreal ];
-  · exact lt_top_iff_ne_top.mpr ( by aesop )
+  · convert ENNReal.ofReal_lt_ofReal_iff (show 0 < ⟪ρ.M, ρ.M.log - x'.M.log⟫ from lt_of_le_of_lt (by positivity) hx' ) |>.2 hx' using 1
+    cases y
+    · simp at hy
+    simp only [ENNReal.ofReal, ENNReal.toNNReal_coe, Real.toNNReal_coe, ENNReal.coe_lt_coe]
+    rw [← NNReal.coe_lt_coe, Real.toNNReal_of_nonneg (le_trans (by positivity) hx'.le)]
+    simp [← ENNReal.ofReal_coe_nnreal]
+  · rw [lt_top_iff_ne_top, ne_eq] at hy ⊢
+    rwa [EReal.coe_ennreal_eq_top_iff]
 
 /-
 Relative entropy is lower semicontinuous (in each argument, actually, but we only need in the
@@ -1325,19 +2020,20 @@ theorem qRelativeEnt.lowerSemicontinuous (ρ : MState d) : LowerSemicontinuous f
   simp only [zero_lt_one, ↓reduceDIte]
   intro x
   by_cases hx : x.M.ker ≤ ρ.M.ker
-  ·
-    intro y hy;
-    have := @inner_log_bounded_near d _ _ ρ x hx;
+  · intro y hy
     obtain ⟨y', hy'⟩ : ∃ y' : ℝ, y < ENNReal.ofReal y' ∧ y' < ⟪ρ.M, ρ.M.log - x.M.log⟫ := by
       rcases ENNReal.lt_iff_exists_real_btwn.mp hy with ⟨ y', hy₁, hy₂ ⟩;
       rw [ ENNReal.ofReal_lt_iff_lt_toReal ] at hy₂ <;> aesop;
-    have := this ( ⟪ρ.M, ρ.M.log⟫ - y' ) ?_ <;> simp_all [ inner_sub_right ];
-    · filter_upwards [ this ] with σ hσ;
-      split_ifs <;> simp_all [ ENNReal.ofReal ];
-      · refine' lt_of_lt_of_le hy'.1 _;
-        exact_mod_cast le_trans ( max_le ( show y' ≤ ⟪ρ.M, ρ.M.log⟫ - ⟪ρ.M, σ.M.log⟫ from by linarith ) ( show 0 ≤ ⟪ρ.M, ρ.M.log⟫ - ⟪ρ.M, σ.M.log⟫ from by linarith [ show 0 ≤ y' from le_of_not_gt fun h => by norm_num [ Real.toNNReal_of_nonpos h.le ] at hy' ] ) ) le_rfl;
-      · exact hy'.1.trans_le ( by simp );
-    · linarith
+    simp only [↓reduceDIte, inner_sub_right, hx] at hy hy' ⊢
+    have := inner_log_bounded_near hx (y := ⟪ρ.M, ρ.M.log⟫ - y') (by linarith)
+    filter_upwards [this] with σ hσ
+    split
+    · simp_all only [ENNReal.ofReal, forall_const]
+      apply lt_of_lt_of_le hy'.1
+      refine mod_cast max_le (a := y') (b := 0) (c := ⟪ρ.M, ρ.M.log⟫ - ⟪ρ.M, σ.M.log⟫) ?_ ?_
+      · linarith
+      · linarith [ show 0 ≤ y' from le_of_not_gt fun h => by norm_num [ Real.toNNReal_of_nonpos h.le ] at hy' ]
+    · exact hy'.1.trans_le (by simp)
   · intro y hy
     simp only [hx, ↓reduceDIte] at hy ⊢
     have h₂ := qRelativeEnt_lowerSemicontinuous_2 ρ x hx y hy
