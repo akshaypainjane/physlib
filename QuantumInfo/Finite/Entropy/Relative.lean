@@ -1571,10 +1571,10 @@ theorem sandwichedRelRentropy_self (hα : 0 < α) (ρ : MState d) :
   --Technically this holds for all α except for `-1` and `0`. But those are stupid.
   --TODO: Maybe SandwichedRelRentropy should actually be defined differently for α = 0?
     D̃_ α(ρ‖ρ) = 0 := by
-  simp? [SandwichedRelRentropy, NNReal.eq_iff] says
+  simp? [SandwichedRelRentropy, NNReal.eq_iff, hα] says
     simp only [SandwichedRelRentropy, hα, ↓reduceDIte, le_refl, sub_self, inner_zero_right,
-    ENNReal.coe_eq_zero, NNReal.eq_iff, NNReal.coe_mk, NNReal.coe_zero, ite_eq_left_iff,
-    div_eq_zero_iff, Real.log_eq_zero]
+      ENNReal.coe_eq_zero, NNReal.eq_iff, NNReal.coe_mk, NNReal.coe_zero, ite_eq_left_iff,
+      div_eq_zero_iff, Real.log_eq_zero]
   intro hα
   left; right; left
   rw [HermitianMat.rpow_eq_cfc, HermitianMat.rpow_eq_cfc]

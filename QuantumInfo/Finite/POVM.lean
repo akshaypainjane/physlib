@@ -112,7 +112,7 @@ theorem measurementMap_apply_hermitianMat (Λ : POVM X d) (m : HermitianMat d �
   congr!
   ext i j
   simp only [HermitianMat.diagonal, mat_mk, diagonal_apply, single, of_apply]
-  split_ifs <;> (try grind) <;> norm_num
+  split_ifs <;> grind only [= map_zero, = map_one]
 
 /-- A POVM leads to a distribution of outcomes on any given mixed state ρ. -/
 def measure (Λ : POVM X d) (ρ : MState d) : ProbDistribution X := .mk'
