@@ -7,13 +7,14 @@ import Mathlib.Algebra.Algebra.Spectrum.Quasispectrum
 import Mathlib.Algebra.Order.Group.Pointwise.CompleteLattice
 import Mathlib.Analysis.CStarAlgebra.Matrix
 import Mathlib.Analysis.Matrix.Order
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
 import Mathlib.Data.Multiset.Functor --Can't believe I'm having to import this
 import Mathlib.LinearAlgebra.Matrix.Kronecker
-import Mathlib.LinearAlgebra.Matrix.HermitianFunctionalCalculus
 import Mathlib.LinearAlgebra.Matrix.PosDef
 import Mathlib.LinearAlgebra.Matrix.IsDiag
-
 import Mathlib.Tactic.Bound
+import Mathlib.Tactic.NormNum.GCD
 
 import QuantumInfo.ForMathlib.Misc
 
